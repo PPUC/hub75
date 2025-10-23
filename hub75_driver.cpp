@@ -22,11 +22,11 @@
 #include "rotator.cpp"
 #include "fire_effect.hpp"
 #include "hue_value_spectrum.hpp"
+#include "pixel_fill.hpp"
 
 // Set RGB_MATRIX_WIDTH and RGB_MATRIX_HEIGHT to the width and height of your matrix panel!
-#define RGB_MATRIX_WIDTH 64
-#define RGB_MATRIX_HEIGHT 64
-#define OFFSET RGB_MATRIX_WIDTH *(RGB_MATRIX_HEIGHT >> 1)
+#define RGB_MATRIX_WIDTH 32
+#define RGB_MATRIX_HEIGHT 16
 
 // Panel type FM6126A receives some initial incantation sequence.
 // This should usually have no effect on generic matrix panels.
@@ -95,10 +95,11 @@ int led_init(void)
  */
 bool skip_to_next_demo(__unused struct repeating_timer *t)
 {
-    if (++demo_index > 5)
+    if (++demo_index > 6)
     {
         demo_index = 0; // Cycle through all examples
     }
+
     return true;
 }
 
@@ -114,7 +115,7 @@ void core1_entry()
 void initialize()
 {
     // Set system clock to 250MHz - just to show that it is possible to drive the HUB75 panel with a high clock speed
-    set_sys_clock_khz(250000, true);
+    set_sys_clock_khz(25000, true);
 
     stdio_init_all(); // Initialize Pico SDK
 
@@ -129,10 +130,12 @@ int main()
 {
     initialize();
 
+    sleep_ms(5000);
+
     // The following examples are animated. In the update function the color of the modified image data is ramped up to 10 bits and the image data is interwoven.
 
     // Create bouncing balls using pico_graphics functionality - image data is delivered in uint32_t array with 24-bit (rgb888) color data format
-    BouncingBalls bouncingBalls(25, RGB_MATRIX_WIDTH, RGB_MATRIX_HEIGHT);
+    BouncingBalls bouncingBalls(3, RGB_MATRIX_WIDTH, RGB_MATRIX_HEIGHT);
 
     // Create rotating antialiased line using pico_graphics functionality - image data is delivered in uint32_t array with 24-bit (rgb888) color data format
     Rotator rotator(RGB_MATRIX_WIDTH, RGB_MATRIX_HEIGHT);
@@ -141,6 +144,8 @@ int main()
     FireEffect fireEffect = FireEffect(RGB_MATRIX_WIDTH, RGB_MATRIX_HEIGHT);
 
     HueValueSpectrum hueValueSpectrum = HueValueSpectrum(RGB_MATRIX_WIDTH, RGB_MATRIX_HEIGHT);
+
+    PixelFill pixelFill = PixelFill(RGB_MATRIX_WIDTH, RGB_MATRIX_HEIGHT);
 
     // Cycle through the examples - move to next example every 15 seconds
     struct repeating_timer timer;
@@ -152,7 +157,8 @@ int main()
     float ms = 1000.0f / hz;
 
     // set brightness of panel
-    float intensity = 0.0f;
+    float intensity = 1.0f;
+    setIntensity(intensity);
     float step = 0.01f;
 
     while (true)
@@ -193,6 +199,11 @@ int main()
             // Vanessa Mai - image data is in b8, g8, r8 format
             // By Lanzunlimited, CC BY-SA 4.0, https://commons.wikimedia.org/w/index.php?curid=87037267
             update_bgr(vanessa_mai_64x64);
+        }
+        else if (demo_index == 6)
+        {
+            pixelFill.fill(0, RGB_MATRIX_WIDTH * RGB_MATRIX_HEIGHT);
+            update(&pixelFill);
         }
 
         // matrix panel brightness will vary

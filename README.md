@@ -533,3 +533,99 @@ In your build, define the scan rate that matches your panel:
 ```
 
 **⚠️ Do not forget to adapt the number of address lines to fit your matrix panel**
+
+74HC138B 
+
+74HC138; 74HCT138
+3-to-8 line decoder/demultiplexer; inverting
+
+The 74HC138; 74HCT138 decodes three binary weighted address inputs (A0, A1 and A2) to
+eight mutually exclusive outputs (Y0 to Y7).
+
+https://community.pixelmatix.com/t/mapping-assistance-32x16-p10/889/15
+
+Hello, I’m new to this community and to Smartmatrix. But not in coding and interfacing things that are not suppose to.
+BTW I’m a french ingineer.
+I have in stock a number of 16x32 4S matrix.
+They are divided in two types :
+_ The one that works perfectly using SMARTMATRIX_HUB75_16ROW_32COL_MOD4SCAN_V3 model
+
+    The ones that display a colmun of 4 or 3 pixels wtith MultiRowRefreshMapping test.
+
+After sone further research on the second case, I found that A,B,C and D must be used this way
+Line 0 : A=0, B=1, C=1, D=1, ( 7  - A) 0
+Line 1 : A=1, B=0, C=1, D=1, ( B  - C) 2
+Line 2 : A=1, B=1, C=0, D=1, ( C  - B) 4
+Line 4 : A=1, B=1, C=1, D=0, ( D  - 7) 8
+
+use R1,G1,B1 for the 4 first lines (0 to 3)
+use R2,G2,B2 for the 4 last lines (4 to 7)
+
+Just have to implement this logic in Smartmatrix.
+
+My regular Matrix use a ship : LEDASIC PR4538 to do this job on the card by decoding A and B signal and split then in 4 outputs (line select)
+
+Hope this wil help you.
+I Have a piece of code that run on a ESP32 to prove this algorithm.
+Best regards
+Eric
+
+
+
+
+
+Section of text on page 11 is as follows:
+Inside the RUL6024 is a 16-bit shift register. Multiple RUL6024 serial data shifts. Each clock cycle CLK transfers 1 bit of data.
+
+SDI, serial data input driver on/off control. Schmidt buffered input. When data "1" is written to SDI the switch controls the shift
+Register / on the *rising* edge of CLK.
+
+CLK serial data shift clock. Schmidt buffered input. All data/off control transitions are synchronized by the MSB of 1
+
+On the rising edge of CLK, single-channel data is shifted to SD at the same time. After the rising edge input of CLK is approved, the rising edge lasts for 100ns.
+
+**The number of CLK rising edges contained in the LE high level triggers different instructions. **
+
+When the LE high level contains 3 CLKs, the data in the shift register it is latched into the latch and moved into the display register when waiting for the next display. 
+
+Similarly, when LE contains 11 CLKs, the shift register the data is written into the status register 1. 
+
+When the LED contains 12 CLKs, the shift register data is moved into the status register 2. 
+
+By rewriting the status the value of the register can configure some parameters of display and blanking.
+
+The rising edge of OE moves the value in the latch into the display register, and OE serves as a display enable. When OE is low, the display is turned on, and the data Ports with a register of 1 will be enabled.
+
+SDO is the output of the shift register. When the shift data exceeds 16, the first data moved in by SDI will be shifted out as the next
+Chip input.
+
+
+Hi Jakub,
+
+It's been quite some time since I last got in touch. After the first 64x64 matrix panel worked out of the box with my driver, I tried to control the other two Matrix panels as well.
+I did start to work on the 32x16 Matrix Panel but came to the insight that I first have to look at the matrix panels hardware.  One type of chip used on this matrix panel is the 74HC138B. During my internet research, I came across a data sheet for 74HC138; 74HCT138, a  3-to-8-line decoder/demultiplexer; inverting. The 74HC138; 74HCT138 decodes three binary-weighted address inputs (A0, A1, and A2) to eight mutually exclusive outputs (Y0 to Y7).
+I could not find a data sheet for the 74HC138B chip. I assume that this chip is a variant of the chip types mentioned above and has also 3 row select pins which allows 8 rows to be addressed.
+Based on this assumption the 32x16 panel should be multiplexing 4 rows simultaneously.
+After making some adjustments to the current driver, I can address all pixels of the matrix. The pixel mapping still needs to be finalized. I still need to think about the exact mappings so that circles, lines, etc. are displayed correctly. Once this is done, I need to deal with ghosting, as this has confused me quite a bit.
+
+For the last 64x64 matrix panel I could not lit any pixel up to now. Does the panel expect a certain voltage ? Do you know a driver with which this matrix panel is working ?
+
+Kind regards
+Jürgen
+
+There had been several impediments to be surmounted with this 32x16 matrix panel.
+- I couldn't find a data sheet for the 74HC138**B** chip. I had assumed that this chip was a variant of the 74HC138 and 74HCT138 chip types, which are 3-to-8-line decoders/demultiplexers. If the 74HC138**B** chip were the same as these chips, the matrix panel would perform 2-wire multiplexing and use 3 pins for row addressing. However, since this 32x16 matrix panel performs 4-wire multiplexing, it only needs to address 4 lines to cover all 16 rows, which is possible with 2 address pins. This result is reflected in the code with this definition `#define ROWSEL_N_PINS 2`.
+- It took me some time to understand and program the pixel mapping for this matrix panel. During development, I had to reduce the system clock frequency to 25,000 Hz. Ghosting misled me several times regarding the pixel mapping of the matrix panel.
+- I conducted some experiments in the .program hub75_row method in the hub75.pio file to reduce ghosting. But this is based on guesswork. More research needs to be done to find out how this matrix panel can handle higher system clock frequencies. If that fails one way to go might be to reduce DMA or PIO speed to make the matrix panel independent of the system clock.
+
+A test version for this matrix panel is available in the (temporary) branch []().
+
+
+
+
+
+	
+	
+
+	
+

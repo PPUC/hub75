@@ -8,6 +8,8 @@ using namespace pimoroni;
 class BouncingBalls : public PicoGraphics_PenRGB888
 {
 private:
+    uint width, height;
+
     struct mPoint
     {
         float x;
@@ -29,11 +31,11 @@ private:
 
 public:
 
-    explicit BouncingBalls(uint quantityOfBalls = 10, uint width = 64, uint height = 64) : PicoGraphics_PenRGB888(width, height, nullptr)
+    explicit BouncingBalls(uint quantityOfBalls = 10, uint width = 64, uint height = 64) : PicoGraphics_PenRGB888(width, height, nullptr), width(width), height(height)
     {
         mCreateShapes(quantityOfBalls);
 
-        mTextLocation = Point(10, 10);
+        mTextLocation = Point(1, 1);
         mBG = create_pen(0, 0, 0);
         mWHITE = create_pen(250, 250, 250);
         set_font(&font14_outline);

@@ -22,7 +22,11 @@
 
 .wrap_target
     out pins, 5 [7]    side 0x2 ; Deassert OEn, output row select
-    out x, 27   [7]    side 0x3 ; Pulse LATCH, get OEn pulse width
+    ;nop         [7]   side 0x2
+    out x, 27   [7]    side 0x3 ; Pulse LATCH, get OEn pulse width   
+    nop         [7]   side 0x2 
+    ;nop         [7]   side 0x2 
+    ;nop         [3]   side 0x2 
 pulse_loop:
     jmp x-- pulse_loop side 0x0 ; Assert OEn for x+1 cycles
     in x, 32           side 0x0 ; Output data sent to DMA channel after OEn has finished

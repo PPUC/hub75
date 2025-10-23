@@ -7,8 +7,8 @@ void BouncingBalls::bounce() {
     set_pen(mBG);
     clear(); 
     
-    int bound_w = bounds.w;
-    int bound_h = bounds.h;
+    int bound_w = width;
+    int bound_h = height;
 
     for (auto &shape : mShapes)
     {
@@ -38,7 +38,7 @@ void BouncingBalls::bounce() {
     }
 
     set_pen(mWHITE);
-    text("Hello World", mTextLocation, false, 0.5f, 0.0f, false);
+    text("Hello", mTextLocation, false, 0.5f, 0.0f, false);
 }
 
 void BouncingBalls::mCreateShapes(int quantityOfBalls)

@@ -7,18 +7,20 @@
 #include "hub75.hpp"
 #include "hub75.pio.h"
 
+#include "rul6024.h"
+
 // Wiring of the HUB75 matrix
 #define DATA_BASE_PIN 0
 #define DATA_N_PINS 6
 #define ROWSEL_BASE_PIN 6
-#define ROWSEL_N_PINS 5
+#define ROWSEL_N_PINS 2
 #define CLK_PIN 11
 #define STROBE_PIN 12
 #define OEN_PIN 13
 
 #define EXIT_FAILURE 1
 
-#define TEMPORAL_DITHERING // use temporal dithering - remove define to use no dithering
+// #define TEMPORAL_DITHERING // use temporal dithering - remove define to use no dithering
 
 // Scan rate 1 : 32 for a 64x64 matrix panel means 64 pixel height divided by 32 pixel results in 2 rows lit simultaneously.
 // Scan rate 1 : 16 for a 64x64 matrix panel means 64 pixel height divided by 16 pixel results in 4 rows lit simultaneously.
@@ -27,8 +29,8 @@
 // ...
 // Define either HUB75_MULTIPLEX_2_ROWS or HUB75_MULTIPLEX_2_ROWS to fit your matrix panel.
 
-#define HUB75_MULTIPLEX_2_ROWS // two rows lit simultaneously
-// #define HUB75_MULTIPLEX_4_ROWS   // four rows lit simultaneously
+// #define HUB75_MULTIPLEX_2_ROWS // two rows lit simultaneously
+#define HUB75_MULTIPLEX_4_ROWS // four rows lit simultaneously
 
 #if !defined(HUB75_MULTIPLEX_2_ROWS) && !defined(HUB75_MULTIPLEX_4_ROWS)
 #error "You must define either HUB75_MULTIPLEX_2_ROWS or HUB75_MULTIPLEX_4_ROWS to match your panel's scan rate"
@@ -76,7 +78,7 @@ static const uint16_t lut[256] = {
 #endif
 
 // Frame buffer for the HUB75 matrix - memory area where pixel data is stored
-volatile uint32_t *frame_buffer; ///< Interwoven image data for examples;
+volatile __attribute__((aligned(4))) uint32_t *frame_buffer; ///< Interwoven image data for examples;
 
 // Utility function to claim a DMA channel and panic() if there are none left
 static int claim_dma_channel(const char *channel_name);
@@ -423,7 +425,236 @@ void FM6126A_setup()
 
     // Ridiculous register write nonsense for the FM6126A-based 64x64 matrix
     FM6126A_write_register(0b1111111111111110, 12);
-    FM6126A_write_register(0b0000001000000000, 13);
+    FM6126A_write_register(0b0000010000000000, 13);
+}
+
+void RUL6024_init_register()
+{
+    // Set up GPIO
+    for (auto i = 0; i < DATA_N_PINS; i++)
+    {
+        gpio_init(DATA_BASE_PIN + i);
+        gpio_set_function(DATA_BASE_PIN + i, GPIO_FUNC_SIO);
+        gpio_set_dir(DATA_BASE_PIN + i, true);
+        gpio_put(DATA_BASE_PIN + i, 0);
+    }
+
+    for (auto i = 0; i < ROWSEL_N_PINS; i++)
+    {
+        gpio_init(ROWSEL_BASE_PIN + i);
+        gpio_set_function(ROWSEL_BASE_PIN + i, GPIO_FUNC_SIO);
+        gpio_set_dir(ROWSEL_BASE_PIN + i, true);
+        gpio_put(ROWSEL_BASE_PIN + i, 0);
+    }
+
+    gpio_init(CLK_PIN);
+    gpio_set_function(CLK_PIN, GPIO_FUNC_SIO);
+    gpio_set_dir(CLK_PIN, true);
+    gpio_put(CLK_PIN, LOW);
+
+    gpio_init(STROBE_PIN);
+    gpio_set_function(STROBE_PIN, GPIO_FUNC_SIO);
+    gpio_set_dir(STROBE_PIN, true);
+    gpio_put(CLK_PIN, LOW);
+
+    gpio_init(OEN_PIN);
+    gpio_set_function(OEN_PIN, GPIO_FUNC_SIO);
+    gpio_set_dir(OEN_PIN, true);
+    gpio_put(OEN_PIN, LOW);
+}
+
+void RUL6024_write_register(uint16_t value, uint8_t position)
+{
+    gpio_put(STROBE_PIN, LOW);
+    sleep_us(10);
+
+    uint8_t threshold = width - position;
+    for (auto i = 0u; i < width; i++)
+    {
+        auto j = i % 16;
+        bool b = value & (1 << j);
+
+        gpio_put(CLK_PIN, LOW);
+        sleep_us(10);
+        gpio_put(DATA_BASE_PIN, b);
+        gpio_put((DATA_BASE_PIN + 1), b);
+        gpio_put((DATA_BASE_PIN + 2), b);
+        gpio_put((DATA_BASE_PIN + 3), b);
+        gpio_put((DATA_BASE_PIN + 4), b);
+        gpio_put((DATA_BASE_PIN + 5), b);
+
+        // Assert strobe/latch if i > threshold
+        // This somehow indicates to the FM6126A which register we want to write :|
+        gpio_put(STROBE_PIN, i > threshold);
+        sleep_us(10);
+        gpio_put(CLK_PIN, HIGH);
+        sleep_us(10);
+    }
+}
+
+void RUL6024_write_command(uint8_t command)
+{
+    // The chip contains a simple 16-bit shift register. The grayscale value and configuration
+    // value are latched into the shift register (the data transmitted to the chip first is the high bit
+    // of the register). The control command is parsed by counting the length of the LE signal.
+    // Different LE lengths represent different commands. For example, a LE signal with a
+    // length of 3 represents the "Data_Latch" command, which is used to control the shift
+    // register to latch the value and send the 16-bit data in the shift register to the
+    // output channel. The following table lists all the commands and their meanings.
+    //
+    // Command Name    LE length     Command Description
+    //
+    // RESET_OEN       1 & 2         The reset signal of the time-sharing display function is 1 LE width first, followed by 2 LE widths.
+    // DATA_LATCH      3             Latch 16 bit data and send it to output channel
+    // Reserved        4 to 10       Reserved
+    // WR_REG1         11            Write configuration register 1
+    // WR_REG2         12            Write configuration register 2
+
+    switch (command)
+    {
+    case CMD_RESET_OEN:
+        printf("DO RESET_OEN COMMAND\n");
+        // The reset signal of the time-sharing display function is 1 LE width first, followed by 2 LE widths.
+
+        gpio_put(OEN_PIN, HIGH);
+        sleep_us(10);
+        gpio_put(CLK_PIN, LOW);
+        gpio_put(STROBE_PIN, LOW); // clk    --_--
+        sleep_us(10);              // LE     _____
+                                   // OE     ---__
+        gpio_put(CLK_PIN, HIGH);
+        sleep_us(10);
+
+        gpio_put(CLK_PIN, LOW);
+        gpio_put(STROBE_PIN, HIGH);
+        sleep_us(10);
+        gpio_put(OEN_PIN, LOW);
+        sleep_us(10);
+
+        gpio_put(CLK_PIN, HIGH);
+        sleep_us(10);
+
+        gpio_put(STROBE_PIN, LOW);
+        gpio_put(CLK_PIN, LOW);
+        sleep_us(10);
+
+        gpio_put(OEN_PIN, HIGH);
+        sleep_us(10);
+
+        gpio_put(CLK_PIN, HIGH);
+        sleep_us(10);
+        gpio_put(CLK_PIN, LOW);
+        sleep_us(10);
+        gpio_put(OEN_PIN, LOW);
+        sleep_us(10);
+
+        gpio_put(CLK_PIN, HIGH);
+        sleep_us(10);
+
+        gpio_put(CLK_PIN, LOW);
+        gpio_put(STROBE_PIN, HIGH);
+        sleep_us(10);
+        gpio_put(OEN_PIN, HIGH);
+
+        // LE set to high for 2 clock cycle
+        gpio_put(CLK_PIN, HIGH);
+        sleep_us(10);
+        gpio_put(CLK_PIN, LOW);
+        sleep_us(10);
+        gpio_put(CLK_PIN, HIGH);
+        sleep_us(10);
+        gpio_put(STROBE_PIN, LOW);
+        gpio_put(CLK_PIN, LOW);
+        sleep_us(10);
+        break;
+    case CMD_DATA_LATCH:
+        gpio_put(CLK_PIN, LOW);
+        sleep_us(10);
+        gpio_put(CLK_PIN, HIGH);
+        sleep_us(10);
+        gpio_put(STROBE_PIN, HIGH);
+        sleep_us(10);
+        gpio_put(CLK_PIN, LOW);
+        sleep_us(10);
+        gpio_put(CLK_PIN, HIGH);
+        sleep_us(10);
+        gpio_put(CLK_PIN, LOW);
+        sleep_us(10);
+        gpio_put(CLK_PIN, HIGH);
+        sleep_us(10);
+        gpio_put(CLK_PIN, LOW);
+        sleep_us(10);
+        gpio_put(CLK_PIN, HIGH);
+        sleep_us(10);
+        gpio_put(CLK_PIN, LOW);
+        sleep_us(10);
+        gpio_put(STROBE_PIN, LOW);
+        sleep_us(10);
+        gpio_put(OEN_PIN, LOW);
+        break;
+    case CMD_WREG1:
+        gpio_put(CLK_PIN, LOW);
+        gpio_put(STROBE_PIN, LOW);
+        gpio_put(OEN_PIN, HIGH);
+        sleep_us(10);
+
+        for (auto i = 0; i <= CMD_WREG1; i++)
+        {
+            gpio_put(CLK_PIN, HIGH);
+            sleep_us(10);
+            if (i == 0)
+            {
+                gpio_put(STROBE_PIN, HIGH);
+                sleep_us(10);
+            }
+            gpio_put(CLK_PIN, LOW);
+            sleep_us(10);
+        }
+
+        // FM6126A_write_register(WREG1, 11);
+        RUL6024_write_register(WREG1, 12);
+
+        gpio_put(OEN_PIN, LOW);
+        sleep_us(10);
+
+        break;
+    case CMD_WREG2:
+        gpio_put(OEN_PIN, HIGH);
+        gpio_put(CLK_PIN, LOW);
+        gpio_put(STROBE_PIN, LOW);
+        sleep_us(10);
+
+        for (auto i = 0; i <= CMD_WREG2; i++)
+        {
+            gpio_put(CLK_PIN, HIGH);
+            sleep_us(10);
+            if (i == 0)
+            {
+                gpio_put(STROBE_PIN, HIGH);
+                sleep_us(10);
+            }
+            gpio_put(CLK_PIN, LOW);
+            sleep_us(10);
+        }
+
+        // FM6126A_write_register(WREG2, 12);
+        RUL6024_write_register(WREG2, 12);
+
+        gpio_put(OEN_PIN, LOW);
+        sleep_us(10);
+        break;
+    }
+}
+
+void RUL6024_setup()
+{
+    RUL6024_init_register();
+
+    RUL6024_write_command(CMD_WREG1);
+    RUL6024_write_command(CMD_WREG2);
+    // RESET_OEN is required after writing WREG2
+    RUL6024_write_command(CMD_RESET_OEN);
+    // RUL6024_write_command(CMD_DATA_LATCH);
 }
 
 /**
@@ -442,8 +673,6 @@ void create_hub75_driver(uint w, uint h, PanelType panel_type, bool inverted_stb
     height = h;
 #ifdef HUB75_MULTIPLEX_2_ROWS
     offset = width * (height >> 1);
-#elif defined HUB75_MULTIPLEX_4_ROWS
-    offset = width * (height >> 2);
 #endif
 
     frame_buffer = new uint32_t[width * height](); // Allocate memory for frame buffer and zero-initialize
@@ -452,7 +681,8 @@ void create_hub75_driver(uint w, uint h, PanelType panel_type, bool inverted_stb
 
     if (panel_type == PANEL_FM6126A)
     {
-        FM6126A_setup();
+        // FM6126A_setup();
+        // RUL6024_setup();
     }
 
     configure_pio(inverted_stb);
@@ -655,10 +885,10 @@ __attribute__((optimize("unroll-loops"))) void update(
 {
     if (graphics->pen_type == PicoGraphics::PEN_RGB888)
     {
-        uint32_t const *src = static_cast<uint32_t const *>(graphics->frame_buffer);
+        __attribute__((aligned(4))) uint32_t const *src = static_cast<uint32_t const *>(graphics->frame_buffer);
 
-        const size_t pixels = width * height;
 #ifdef HUB75_MULTIPLEX_2_ROWS
+        const size_t pixels = width * height;
         for (size_t i = 0, j = 0; i < pixels; i += 2, ++j)
         {
             frame_buffer[i] = temporal_dithering(j, src[j]);
@@ -666,22 +896,53 @@ __attribute__((optimize("unroll-loops"))) void update(
         }
 #elif defined HUB75_MULTIPLEX_4_ROWS
         // For four-rows-lit multiplexing we step by 4 and use offsets 0, offset, 2*offset, 3*offset
-        for (size_t i = 0, j = 0; i < pixels; i += 4, ++j)
-        {
-            size_t j0 = j;
-            size_t j1 = j0 + offset;
-            size_t j2 = j1 + offset;
-            size_t j3 = j2 + offset;
+        auto i = 0;
+        auto line = 0;
+        auto counter = 0;
+        int four_rows_offset = 4 * width;
+        int eight_rows_offset = 8 * width;
 
-            frame_buffer[i] = temporal_dithering(j0, src[j0]);
-            frame_buffer[i + 1] = temporal_dithering(j1, src[j1]);
-            frame_buffer[i + 2] = temporal_dithering(j2, src[j2]);
-            frame_buffer[i + 3] = temporal_dithering(j3, src[j3]);
+        int total_pixels = width * height >> 1;
+
+        for (auto j = 0; j < total_pixels; j++)
+        {
+            if ((j & 8) == 0) // (j % 16) < 8
+            {
+                // left side of matrix panel
+                auto segment = line << 3;
+                uint32_t index = j - segment;
+                frame_buffer[i] = temporal_dithering(index, src[index]);
+                index += eight_rows_offset;
+                frame_buffer[i + 1] = temporal_dithering(index, src[index]);
+            }
+            else
+            {
+                // right side of matrix panel
+                auto segment = (line + 1) << 3;
+                uint32_t index = j - segment + four_rows_offset;
+                frame_buffer[i] = temporal_dithering(index, src[index]);
+                index += eight_rows_offset;
+                frame_buffer[i + 1] = temporal_dithering(index, src[index]);
+            }
+            i += 2;
+            if (++counter == 16) // 16 pairs per line → 32 frame_buffer entries
+            {
+                counter = 0;
+                line++;
+            }
         }
 #endif
     }
 }
 #elif not defined TEMPORAL_DITHERING
+
+// Helper: apply LUT and pack into 30-bit RGB (10 bits per channel)
+static inline uint32_t pack_lut_rgb(uint32_t color, const uint16_t *lut)
+{
+    return (lut[(color & 0x0000ff)] << 20) |
+           (lut[(color >> 8) & 0x00ff] << 10) |
+           (lut[(color >> 16) & 0x00ff]);
+}
 /**
  * @brief Updates the frame buffer with pixel data from the source array.
  *
@@ -700,23 +961,52 @@ __attribute__((optimize("unroll-loops"))) void update(
 
         // Ramping up color resolution from 8 to 10 bits via CIE luminance respectively gamma table look-up.
         // Interweave pixels from intermediate buffer into target image to fit the format expected by Hub75 LED panel.
-        uint j = 0;
 
 #ifdef HUB75_MULTIPLEX_2_ROWS
-        for (int i = 0; i < width * height; i += 2)
+        uint j = 0;
+        for (int i = 0; i < width * height; i += 1)
         {
             frame_buffer[i] = lut[(src[j] & 0x0000ff) >> 0] << 20 | lut[(src[j] & 0x00ff00) >> 8] << 10 | lut[(src[j] & 0xff0000) >> 16];
             frame_buffer[i + 1] = lut[(src[j + offset] & 0x0000ff) >> 0] << 20 | lut[(src[j + offset] & 0x00ff00) >> 8] << 10 | lut[(src[j + offset] & 0xff0000) >> 16];
             j++;
         }
 #elif defined HUB75_MULTIPLEX_4_ROWS
-        for (int i = 0; i < width * height; i += 4)
+        int fb_index = 0;
+        int line = 0;
+        int counter = 0;
+
+        const int four_rows_offset = 4 * width;
+        const int eight_rows_offset = 8 * width;
+
+        const int total_pixels = (width * height) >> 1;
+
+#pragma GCC unroll 8
+        for (auto j = 0; j < total_pixels; j++)
         {
-            frame_buffer[i] = lut[(src[j] & 0x0000ff) >> 0] << 20 | lut[(src[j] & 0x00ff00) >> 8] << 10 | lut[(src[j] & 0xff0000) >> 16];
-            frame_buffer[i + 1] = lut[(src[j + offset] & 0x0000ff) >> 0] << 20 | lut[(src[j + offset] & 0x00ff00) >> 8] << 10 | lut[(src[j + offset] & 0xff0000) >> 16];
-            frame_buffer[i + 2] = lut[(src[j + 2 * offset] & 0x0000ff) >> 0] << 20 | lut[(src[j + 2 * offset] & 0x00ff00) >> 8] << 10 | lut[(src[j + 2 * offset] & 0xff0000) >> 16];
-            frame_buffer[i + 3] = lut[(src[j + 3 * offset] & 0x0000ff) >> 0] << 20 | lut[(src[j + 3 * offset] & 0x00ff00) >> 8] << 10 | lut[(src[j + 3 * offset] & 0xff0000) >> 16];
-            j++;
+            const bool left_side = ((j & 8) == 0); // equivalent to (j % 16) < 8
+            uint32_t index;
+
+            if (left_side)
+            {
+                // --- Left side of panel ---
+                index = j - (line << 3);
+            }
+            else
+            {
+                // --- Right side of panel ---
+                index = j - ((line + 1) << 3) + four_rows_offset;
+            }
+
+            frame_buffer[fb_index] = pack_lut_rgb(src[index], lut);
+            frame_buffer[fb_index + 1] = pack_lut_rgb(src[index + eight_rows_offset], lut);
+
+            fb_index += 2;
+
+            if (++counter == 16) // 16 pairs per line → 32 frame_buffer entries
+            {
+                counter = 0;
+                line++;
+            }
         }
 #endif
     }
@@ -763,17 +1053,41 @@ __attribute__((optimize("unroll-loops"))) void update_bgr(const uint8_t *src)
         frame_buffer[i + 1] = temporal_dithering_bgr(i, src[rgb_offset + j], src[rgb_offset + j + 1], src[rgb_offset + j + 2]);
     }
 #elif defined HUB75_MULTIPLEX_4_ROWS
-    for (size_t i = 0, j = 0; i < pixels; j += 3, i += 4)
-    {
-        size_t j0 = j;
-        size_t j1 = j0 + rgb_offset;
-        size_t j2 = j1 + rgb_offset;
-        size_t j3 = j2 + rgb_offset;
+    int fb_index = 0;
+    int line = 0;
+    int counter = 0;
 
-        frame_buffer[i] = temporal_dithering_bgr(i, src[j0], src[j0 + 1], src[j0 + 2]);
-        frame_buffer[i + 1] = temporal_dithering_bgr(i, src[j1], src[j1 + 1], src[j1 + 2]);
-        frame_buffer[i + 2] = temporal_dithering_bgr(i, src[j2], src[j2 + 1], src[j2 + 2]);
-        frame_buffer[i + 3] = temporal_dithering_bgr(i, src[j3], src[j3 + 1], src[j3 + 2]);
+    const int four_rows_offset = 4 * width;
+    const int eight_rows_offset = 8 * width;
+
+    const int total_pixels = (width * height) >> 1;
+
+    for (int j = 0; j < total_pixels; j++)
+    {
+        const bool left_side = ((j & 8) == 0); // equivalent to (j % 16) < 8
+        uint32_t index;
+
+        if (left_side)
+        {
+            // --- Left side of panel ---
+            index = j - (line << 3);
+        }
+        else
+        {
+            // --- Right side of panel ---
+            index = j - ((line + 1) << 3) + four_rows_offset;
+        }
+
+        frame_buffer[fb_index] = temporal_dithering_bgr(index, src[index]);
+        frame_buffer[fb_index + 1] = pack_lut_rgb(index + eight_rows_offset, src[index + eight_rows_offset]);
+
+        fb_index += 2;
+
+        if (++counter == 16) // 16 pairs per line → 32 frame_buffer entries
+        {
+            counter = 0;
+            line++;
+        }
     }
 #endif
 }
@@ -802,14 +1116,54 @@ __attribute__((optimize("unroll-loops"))) void update_bgr(const uint8_t *src)
         k += 3;
     }
 #elif defined HUB75_MULTIPLEX_4_ROWS
-    for (int j = 0; j < width * height; j += 4)
+
+    // for (int j = 0; j < width * height; j += 4)
+    // {
+    //     frame_buffer[j] = lut[src[k]] << 20 | lut[src[k + 1]] << 10 | lut[src[k + 2]];
+    //     frame_buffer[j + 1] = lut[src[rgb_offset + k]] << 20 | lut[src[rgb_offset + k + 1]] << 10 | lut[src[rgb_offset + k + 2]];
+    //     frame_buffer[j + 2] = lut[src[2 * rgb_offset + k]] << 20 | lut[src[2 * rgb_offset + k + 1]] << 10 | lut[src[2 * rgb_offset + k + 2]];
+    //     frame_buffer[j + 3] = lut[src[3 * rgb_offset + k]] << 20 | lut[src[3 * rgb_offset + k + 1]] << 10 | lut[src[3 * rgb_offset + k + 2]];
+    //     k += 3;
+    // }
+
+    int fb_index = 0;
+    int line = 0;
+    int counter = 0;
+
+    const int four_rows_offset = 4 * width * 3;
+    const int eight_rows_offset = 8 * width * 3;
+
+    const int total_pixels = (width * height) >> 1;
+
+#pragma GCC unroll 8
+    for (auto j = 0; j < total_pixels; j++)
     {
-        frame_buffer[j] = lut[src[k]] << 20 | lut[src[k + 1]] << 10 | lut[src[k + 2]];
-        frame_buffer[j + 1] = lut[src[rgb_offset + k]] << 20 | lut[src[rgb_offset + k + 1]] << 10 | lut[src[rgb_offset + k + 2]];
-        frame_buffer[j + 2] = lut[src[2 * rgb_offset + k]] << 20 | lut[src[2 * rgb_offset + k + 1]] << 10 | lut[src[2 * rgb_offset + k + 2]];
-        frame_buffer[j + 3] = lut[src[3 * rgb_offset + k]] << 20 | lut[src[3 * rgb_offset + k + 1]] << 10 | lut[src[3 * rgb_offset + k + 2]];
-        k += 3;
+        const bool left_side = ((j & 8) == 0); // equivalent to (j % 16) < 8
+        uint32_t index;
+
+        if (left_side)
+        {
+            // --- Left side of panel ---
+            index = (j - (line << 3)) * 3;
+        }
+        else
+        {
+            // --- Right side of panel ---
+            index = (j - ((line + 1) << 3)) * 3 + four_rows_offset;
+        }
+
+        frame_buffer[fb_index] = lut[src[index]] << 20 | lut[src[index + 1]] << 10 | lut[src[index + 2]];
+        frame_buffer[fb_index + 1] = lut[src[index + eight_rows_offset]] << 20 | lut[src[index + 1 + eight_rows_offset]] << 10 | lut[src[index + 2 + eight_rows_offset]];
+
+        fb_index += 2;
+
+        if (++counter == 16) // 16 pairs per line → 32 frame_buffer entries
+        {
+            counter = 0;
+            line++;
+        }
     }
+
 #endif
 }
 #endif
