@@ -24,7 +24,7 @@
     out pins, 5 [7]    side 0x2 ; Deassert OEn, output row select
     ;nop         [7]   side 0x2
     out x, 27   [7]    side 0x3 ; Pulse LATCH, get OEn pulse width   
-    nop         [7]   side 0x2 
+    ;nop         [7]   side 0x2 
     ;nop         [7]   side 0x2 
     ;nop         [3]   side 0x2 
 pulse_loop:
