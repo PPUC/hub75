@@ -80,7 +80,7 @@ static const uint16_t lut[256] = {
 // Frame buffer for the HUB75 matrix - memory area where pixel data is stored
 volatile __attribute__((aligned(4))) uint32_t *frame_buffer; ///< Interwoven image data for examples;
 
-static uint16_t *src_map;
+static __attribute__((aligned(2))) uint16_t *src_map;
 
 // Utility function to claim a DMA channel and panic() if there are none left
 static int claim_dma_channel(const char *channel_name);
@@ -662,8 +662,8 @@ void RUL6024_setup()
 void setup_map()
 {
 
-    const int total_pixels = (width * height) >> 1;
-    const int four_rows_offset = 4 * width;
+    const int total_pixels = width * height >> 1;
+    const int four_rows_offset = width * 4;
 
     for (int j = 0, line = 0, counter = 0; j < total_pixels; ++j)
     {
@@ -701,7 +701,7 @@ void create_hub75_driver(uint w, uint h, PanelType panel_type, bool inverted_stb
     frame_buffer = new uint32_t[width * height](); // Allocate memory for frame buffer and zero-initialize
 
 #ifdef HUB75_MULTIPLEX_4_ROWS
-    src_map = new uint16_t[width * height / 2](); // Precomputed index lookup
+    src_map = new uint16_t[width * height >> 1](); // Precomputed index lookup
 #endif
 
     init_accumulators();
@@ -709,7 +709,7 @@ void create_hub75_driver(uint w, uint h, PanelType panel_type, bool inverted_stb
     if (panel_type == PANEL_FM6126A)
     {
         // FM6126A_setup();
-        RUL6024_setup();
+        // RUL6024_setup();
     }
 
     configure_pio(inverted_stb);
@@ -919,56 +919,56 @@ __attribute__((optimize("unroll-loops"))) void update(
 
 #ifdef HUB75_MULTIPLEX_2_ROWS
         const size_t pixels = width * height;
-        for (size_t i = 0, j = 0; i < pixels; i += 2, ++j)
+        for (size_t fb_index = 0, j = 0; fb_index < pixels; fb_index += 2, ++j)
         {
-            frame_buffer[i] = temporal_dithering(j, src[j]);
-            frame_buffer[i + 1] = temporal_dithering(j + offset, src[j + offset]);
+            frame_buffer[fb_index] = temporal_dithering(j, src[j]);
+            frame_buffer[fb_index + 1] = temporal_dithering(j + offset, src[j + offset]);
         }
 #elif defined HUB75_MULTIPLEX_4_ROWS
-        // For four-rows-lit multiplexing we step by 4 and use offsets 0, offset, 2*offset, 3*offset
-        // auto i = 0;
-        // auto line = 0;
-        // auto counter = 0;
-        // int four_rows_offset = 4 * width;
-        int eight_rows_offset = 8 * width;
+        int fb_index = 0;
+        int line = 0;
+        int counter = 0;
+        const int four_rows_offset = 4 * width;
+        const int eight_rows_offset = 8 * width;
+        const int total_pixels = (width * height) >> 1;
 
-        int total_pixels = width * height >> 1;
-
-        // for (auto j = 0; j < total_pixels; j++)
-        // {
-        //     if ((j & 8) == 0) // (j % 16) < 8
-        //     {
-        //         // left side of matrix panel
-        //         auto segment = line << 3;
-        //         uint32_t index = j - segment;
-        //         frame_buffer[i] = temporal_dithering(index, src[index]);
-        //         index += eight_rows_offset;
-        //         frame_buffer[i + 1] = temporal_dithering(index, src[index]);
-        //     }
-        //     else
-        //     {
-        //         // right side of matrix panel
-        //         auto segment = (line + 1) << 3;
-        //         uint32_t index = j - segment + four_rows_offset;
-        //         frame_buffer[i] = temporal_dithering(index, src[index]);
-        //         index += eight_rows_offset;
-        //         frame_buffer[i + 1] = temporal_dithering(index, src[index]);
-        //     }
-        //     i += 2;
-        //     if (++counter == 16) // 16 pairs per line → 32 frame_buffer entries
-        //     {
-        //         counter = 0;
-        //         line++;
-        //     }
-        // }
-
-        for (int j = 0, fb_index = 0; j < total_pixels; ++j, fb_index += 2)
+        for (auto j = 0; j < total_pixels; j++)
         {
-            uint32_t index = src_map[j];
-            frame_buffer[fb_index] = temporal_dithering(index, src[index]);
-            frame_buffer[fb_index + 1] = temporal_dithering(index, src[index + eight_rows_offset]);
+            const bool left_side = ((j & 8) == 0); // replaces (j % 16) < 8
+            uint32_t index;
+            if (left_side)
+            {
+                // --- Left side of panel ---
+                index = j - (line << 3);
+            }
+            else
+            {
+                // --- Right side of panel ---
+                index = j - ((line + 1) << 3) + four_rows_offset;
+            }
+            // frame_buffer[fb_index] = temporal_dithering(index, src[index]); // 
+            frame_buffer[fb_index] = (lut[(src[index] & 0x0000ff)] << 20) | (lut[(src[index] >> 8) & 0x0000ff] << 10) | (lut[(src[index] >> 16) & 0x0000ff]);
+            // pack_lut_rgb(src[index], lut);
+            // frame_buffer[fb_index + 1] = temporal_dithering(index + eight_rows_offset, src[index + eight_rows_offset]); // 
+            frame_buffer[fb_index + 1] = (lut[(src[index + eight_rows_offset] & 0x0000ff)] << 20) | (lut[(src[index + eight_rows_offset] >> 8) & 0x0000ff] << 10) | (lut[(src[index + eight_rows_offset] >> 16) & 0x0000ff]); // pack_lut_rgb(src[index + eight_rows_offset], lut);
+            fb_index += 2;
+            if (++counter == 16) // 16 pairs per line → 32 frame_buffer entries
+            {
+                counter = 0;
+                line++;
+            }
         }
 
+        // For four-rows-lit multiplexing we step by 4 and use offsets 0, offset, 2*offset, 3*offset
+        //     int eight_rows_offset = width * 8;
+        // int total_pixels = width * height >> 1;
+
+        // for (int j = 0, fb_index = 0; j < total_pixels; ++j, fb_index += 2)
+        // {
+        //     uint32_t index = src_map[j];
+        //     frame_buffer[fb_index] = temporal_dithering(index, src[index]);
+        //     frame_buffer[fb_index + 1] = temporal_dithering(index + eight_rows_offset, src[index + eight_rows_offset]);
+        // }
 #endif
     }
 }
@@ -978,12 +978,12 @@ __attribute__((optimize("unroll-loops"))) void update(
 static inline uint32_t pack_lut_rgb(uint32_t color, const uint16_t *lut)
 {
     return (lut[(color & 0x0000ff)] << 20) |
-           (lut[(color >> 8) & 0x00ff] << 10) |
-           (lut[(color >> 16) & 0x00ff]);
+           (lut[(color >> 8) & 0x0000ff] << 10) |
+           (lut[(color >> 16) & 0x0000ff]);
 }
 
 // Helper: apply LUT and pack into 30-bit RGB (10 bits per channel)
-static inline uint32_t pack_lut_rgb(uint32_t r, uint32_t g, uint32_t b, const uint16_t *lut)
+static inline uint32_t pack_lut_bgr(uint32_t b, uint32_t g, uint32_t r, const uint16_t *lut)
 {
     return lut[r] << 20 | lut[g] << 10 | lut[b];
 }
@@ -1071,41 +1071,51 @@ __attribute__((optimize("unroll-loops"))) void update_bgr(const uint8_t *src)
         frame_buffer[i + 1] = temporal_dithering_bgr(i, src[rgb_offset + j], src[rgb_offset + j + 1], src[rgb_offset + j + 2]);
     }
 #elif defined HUB75_MULTIPLEX_4_ROWS
-    int fb_index = 0;
-    int line = 0;
-    int counter = 0;
+    // int fb_index = 0;
+    // int line = 0;
+    // int counter = 0;
 
-    const int four_rows_offset = 4 * width;
-    const int eight_rows_offset = 8 * width;
+    // const int four_rows_offset = 4 * width;
+    // const int eight_rows_offset = 8 * width *3;
 
+    // const int total_pixels = (width * height) >> 1;
+
+    // for (int j = 0; j < total_pixels; j++)
+    // {
+    //     const bool left_side = ((j & 8) == 0); // equivalent to (j % 16) < 8
+    //     uint32_t index;
+
+    //     if (left_side)
+    //     {
+    //         // --- Left side of panel ---
+    //         index = j - (line << 3);
+    //     }
+    //     else
+    //     {
+    //         // --- Right side of panel ---
+    //         index = j - ((line + 1) << 3) + four_rows_offset;
+    //     }
+
+    //     frame_buffer[fb_index] = temporal_dithering_bgr(index, src[index*3], src[index * 3 + 1], src[index * 3 + 2]);
+    //     frame_buffer[fb_index] = temporal_dithering_bgr(index, src[index*3+eight_rows_offset], src[index * 3 + 1+eight_rows_offset], src[index * 3 + 2+eight_rows_offset]);
+
+    //     fb_index += 2;
+
+    //     if (++counter == 16) // 16 pairs per line → 32 frame_buffer entries
+    //     {
+    //         counter = 0;
+    //         line++;
+    //     }
+    // }
+
+    const int eight_rows_offset = 8 * width * 3;
     const int total_pixels = (width * height) >> 1;
 
-    for (int j = 0; j < total_pixels; j++)
+    for (int j = 0, fb_index = 0; j < total_pixels; ++j, fb_index += 2)
     {
-        const bool left_side = ((j & 8) == 0); // equivalent to (j % 16) < 8
-        uint32_t index;
-
-        if (left_side)
-        {
-            // --- Left side of panel ---
-            index = j - (line << 3);
-        }
-        else
-        {
-            // --- Right side of panel ---
-            index = j - ((line + 1) << 3) + four_rows_offset;
-        }
-
-        frame_buffer[fb_index] = pack_lut_rgb(index, src[index]);
-        frame_buffer[fb_index + 1] = pack_lut_rgb(index + eight_rows_offset, src[index + eight_rows_offset]);
-
-        fb_index += 2;
-
-        if (++counter == 16) // 16 pairs per line → 32 frame_buffer entries
-        {
-            counter = 0;
-            line++;
-        }
+        uint32_t index = src_map[j];
+        frame_buffer[fb_index] = temporal_dithering_bgr(index, src[index * 3], src[index * 3 + 1], src[index * 3 + 2]);                                                                 // (lut[src[index * 3]] << 20) | (lut[src[index * 3 + 1]] << 10) | (lut[src[index * 3 + 2]]);
+        frame_buffer[fb_index + 1] = temporal_dithering_bgr(index, src[index * 3 + eight_rows_offset], src[index * 3 + 1 + eight_rows_offset], src[index * 3 + 2 + eight_rows_offset]); // (lut[src[index * 3 + eight_rows_offset]] << 20) | (lut[src[index * 3 + 1 + eight_rows_offset]] << 10) | (lut[src[index * 3 + 2 + eight_rows_offset]]);
     }
 #endif
 }
@@ -1121,63 +1131,30 @@ __attribute__((optimize("unroll-loops"))) void update_bgr(const uint8_t *src)
  */
 __attribute__((optimize("unroll-loops"))) void update_bgr(const uint8_t *src)
 {
-    uint rgb_offset = offset * 3;
-    uint k = 0;
+    // uint rgb_offset = offset * 3;
+    // uint k = 0;
+
     // Ramping up color resolution from 8 to 10 bits via CIE luminance respectively gamma table look-up.
     // Interweave pixels as required by Hub75 LED panel matrix
 
 #ifdef HUB75_MULTIPLEX_2_ROWS
-    for (int j = 0; j < width * height; j += 2)
+    uint rgb_offset = offset * 3;
+    for (int j = 0, k = 0; j < width * height; j += 2, k += 3)
     {
         frame_buffer[j] = lut[src[k]] << 20 | lut[src[k + 1]] << 10 | lut[src[k + 2]];
         frame_buffer[j + 1] = lut[src[rgb_offset + k]] << 20 | lut[src[rgb_offset + k + 1]] << 10 | lut[src[rgb_offset + k + 2]];
-        k += 3;
+        // k += 3;
     }
 #elif defined HUB75_MULTIPLEX_4_ROWS
-    int fb_index = 0;
-    int line = 0;
-    int counter = 0;
-
-    const int four_rows_offset = 4 * width * 3;
     const int eight_rows_offset = 8 * width * 3;
-
     const int total_pixels = (width * height) >> 1;
 
-#pragma GCC unroll 8
-        for (auto j = 0; j < total_pixels; j++)
-        {
-            const bool left_side = ((j & 8) == 0); // equivalent to (j % 16) < 8
-            uint32_t index;
-
-            if (left_side)
-            {
-                // --- Left side of panel ---
-                index = (j - (line << 3)) * 3;
-            }
-            else
-            {
-                // --- Right side of panel ---
-                index = (j - ((line + 1) << 3)) * 3 + four_rows_offset;
-            }
-
-            frame_buffer[fb_index] = lut[src[index]] << 20 | lut[src[index + 1]] << 10 | lut[src[index + 2]];
-            frame_buffer[fb_index + 1] = lut[src[index + eight_rows_offset]] << 20 | lut[src[index + 1 + eight_rows_offset]] << 10 | lut[src[index + 2 + eight_rows_offset]];
-
-            fb_index += 2;
-
-            if (++counter == 16) // 16 pairs per line → 32 frame_buffer entries
-            {
-                counter = 0;
-                line++;
-            }
-        }
-
-    // for (int j = 0, fb_index = 0; j < total_pixels; ++j, fb_index += 2)
-    // {
-    //     uint32_t index = src_map[j];
-    //     frame_buffer[fb_index] = pack_lut_rgb(src[index], src[index + 1], src[index + 2], lut);
-    //     frame_buffer[fb_index + 1] = pack_lut_rgb(src[index + eight_rows_offset], src[index + 1 + eight_rows_offset], src[index + 2 + eight_rows_offset], lut);
-    // }
+    for (int j = 0, fb_index = 0; j < total_pixels; ++j, fb_index += 2)
+    {
+        uint32_t index = src_map[j];
+        frame_buffer[fb_index] = (lut[src[index * 3]] << 20) | (lut[src[index * 3 + 1]] << 10) | (lut[src[index * 3 + 2]]);
+        frame_buffer[fb_index + 1] = (lut[src[index * 3 + eight_rows_offset]] << 20) | (lut[src[index * 3 + 1 + eight_rows_offset]] << 10) | (lut[src[index * 3 + 2 + eight_rows_offset]]);
+    }
 
 #endif
 }

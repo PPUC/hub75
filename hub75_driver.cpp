@@ -42,7 +42,7 @@
 // stb_inverted - either true (inverted) or false (default)
 #define STB_INVERTED false
 
-static int demo_index = 0; ///< Example selector
+static int demo_index = 6; ///< Example selector
 
 // Perform initialisation
 int pico_led_init(void)
@@ -115,7 +115,7 @@ void core1_entry()
 void initialize()
 {
     // Set system clock to 250MHz - just to show that it is possible to drive the HUB75 panel with a high clock speed
-    set_sys_clock_khz(30000, true);
+    // set_sys_clock_khz(30000, true);
 
     stdio_init_all(); // Initialize Pico SDK
 
