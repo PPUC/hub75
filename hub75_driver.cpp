@@ -14,7 +14,7 @@
 
 // Example images
 #include "vanessa_mai_64x64.h"
-#include "taylor_swift_64x64.h"
+#include "taylor_swift_32x16.h"
 
 // Example effects
 #include "antialiased_line.hpp"
@@ -42,7 +42,7 @@
 // stb_inverted - either true (inverted) or false (default)
 #define STB_INVERTED false
 
-static int demo_index = 6; ///< Example selector
+static int demo_index = 0; ///< Example selector
 
 // Perform initialisation
 int pico_led_init(void)
@@ -95,7 +95,7 @@ int led_init(void)
  */
 bool skip_to_next_demo(__unused struct repeating_timer *t)
 {
-    if (++demo_index > 0)
+    if (++demo_index > 6)
     {
         demo_index = 0; // Cycle through all examples
     }
@@ -115,7 +115,7 @@ void core1_entry()
 void initialize()
 {
     // Set system clock to 250MHz - just to show that it is possible to drive the HUB75 panel with a high clock speed
-    set_sys_clock_khz(250000, true);
+    set_sys_clock_khz(150000, true);
 
     stdio_init_all(); // Initialize Pico SDK
 
@@ -179,7 +179,7 @@ int main()
         {
             // Taylor Swift - image data is in b8, g8, r8 format
             // By iHeartRadioCA, CC BY 3.0, https://commons.wikimedia.org/w/index.php?curid=137551448
-            update_bgr(taylor_swift_64x64);
+            update_bgr(taylor_swift_32x16);
         }
         else if (demo_index == 3)
         {
