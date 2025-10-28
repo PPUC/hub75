@@ -618,6 +618,12 @@ There had been several impediments to be surmounted with this 32x16 matrix panel
 - It took me some time to understand and program the pixel mapping for this matrix panel. During development, I had to reduce the system clock frequency to 25,000 Hz. Ghosting misled me several times regarding the pixel mapping of the matrix panel.
 - I conducted some experiments in the .program hub75_row method in the hub75.pio file to reduce ghosting. But this is based on guesswork. More research needs to be done to find out how this matrix panel can handle higher system clock frequencies. If that fails one way to go might be to reduce DMA or PIO speed to make the matrix panel independent of the system clock.
 
+In [Electrodragon Discussion](https://rpi-rgb-led-matrix.discourse.group/t/electrodragon-2x2-matrix-of-64x32-panel-4-blank/1096/4) it is referenced that RUL6024 boards need to be initialised similar to FM6216 boards.
+
+In some inline comment (which I can not find any more) was noted that the panel should be worked on line-wise and not plane-wise as this would show some black pixel as green (as it does with my panel)
+
+List of [board707 supported panels](https://github.com/board707/DMD_STM32/wiki/Led_drivers)
+
 A test version for this matrix panel is available in the (temporary) branch []().
 
 

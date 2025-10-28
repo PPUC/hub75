@@ -95,7 +95,7 @@ int led_init(void)
  */
 bool skip_to_next_demo(__unused struct repeating_timer *t)
 {
-    if (++demo_index > 6)
+    if (++demo_index > 0)
     {
         demo_index = 0; // Cycle through all examples
     }
@@ -115,7 +115,7 @@ void core1_entry()
 void initialize()
 {
     // Set system clock to 250MHz - just to show that it is possible to drive the HUB75 panel with a high clock speed
-    // set_sys_clock_khz(30000, true);
+    set_sys_clock_khz(250000, true);
 
     stdio_init_all(); // Initialize Pico SDK
 
