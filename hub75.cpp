@@ -23,7 +23,7 @@
 
 #define EXIT_FAILURE 1
 
-// #define TEMPORAL_DITHERING // use temporal dithering - remove define to use no dithering
+#define TEMPORAL_DITHERING // use temporal dithering - remove define to use no dithering
 
 // Scan rate 1 : 32 for a 64x64 matrix panel means 64 pixel height divided by 32 pixel results in 2 rows lit simultaneously.
 // Scan rate 1 : 16 for a 64x64 matrix panel means 64 pixel height divided by 16 pixel results in 4 rows lit simultaneously.
@@ -45,22 +45,22 @@
 
 #ifdef TEMPORAL_DITHERING
 static const uint16_t lut[256] = {
-    0, 28, 57, 85, 114, 142, 171, 199, 228, 256, 285, 313, 341, 370, 398, 427,
-    455, 484, 512, 541, 569, 598, 627, 658, 689, 721, 755, 789, 825, 861, 899, 937,
-    977, 1018, 1060, 1103, 1147, 1192, 1239, 1287, 1336, 1386, 1437, 1490, 1544, 1599, 1656, 1714,
-    1773, 1834, 1896, 1959, 2024, 2090, 2157, 2226, 2297, 2369, 2442, 2517, 2593, 2671, 2751, 2832,
-    2914, 2999, 3085, 3172, 3261, 3352, 3444, 3538, 3634, 3732, 3831, 3932, 4035, 4139, 4245, 4354,
-    4464, 4575, 4689, 4804, 4922, 5041, 5162, 5285, 5410, 5537, 5666, 5797, 5930, 6065, 6202, 6341,
-    6482, 6626, 6771, 6918, 7068, 7220, 7373, 7529, 7687, 7848, 8010, 8175, 8342, 8512, 8683, 8857,
-    9033, 9212, 9393, 9576, 9762, 9949, 10140, 10333, 10528, 10725, 10926, 11128, 11333, 11541, 11751, 11963,
-    12179, 12396, 12617, 12840, 13065, 13293, 13524, 13757, 13993, 14232, 14474, 14718, 14965, 15215, 15467, 15722,
-    15980, 16241, 16505, 16771, 17041, 17313, 17588, 17866, 18147, 18431, 18717, 19007, 19300, 19596, 19894, 20196,
-    20501, 20809, 21119, 21433, 21750, 22071, 22394, 22720, 23050, 23383, 23719, 24058, 24400, 24746, 25095, 25447,
-    25802, 26161, 26523, 26888, 27257, 27629, 28004, 28383, 28765, 29151, 29540, 29932, 30328, 30728, 31131, 31537,
-    31947, 32360, 32777, 33198, 33622, 34050, 34481, 34916, 35355, 35797, 36243, 36693, 37146, 37603, 38064, 38529,
-    38997, 39469, 39945, 40425, 40908, 41396, 41887, 42382, 42881, 43384, 43891, 44401, 44916, 45435, 45957, 46484,
-    47015, 47549, 48088, 48631, 49178, 49728, 50283, 50843, 51406, 51973, 52545, 53120, 53700, 54284, 54873, 55465,
-    56062, 56663, 57269, 57878, 58492, 59111, 59733, 60360, 60992, 61627, 62268, 62912, 63561, 64215, 64873, 65535};
+    0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 18, 20, 21, 23, 25, 27,
+    28, 30, 32, 34, 36, 37, 39, 41, 43, 45, 47, 49, 52, 54, 56, 59,
+    61, 64, 66, 69, 72, 75, 77, 80, 83, 87, 90, 93, 96, 100, 103, 107,
+    111, 115, 118, 122, 126, 131, 135, 139, 144, 148, 153, 157, 162, 167, 172, 177,
+    182, 187, 193, 198, 204, 209, 215, 221, 227, 233, 239, 246, 252, 259, 265, 272,
+    279, 286, 293, 300, 308, 315, 323, 330, 338, 346, 354, 362, 371, 379, 388, 396,
+    405, 414, 423, 432, 442, 451, 461, 470, 480, 490, 501, 511, 521, 532, 543, 553,
+    564, 576, 587, 598, 610, 622, 634, 646, 658, 670, 683, 695, 708, 721, 734, 748,
+    761, 775, 788, 802, 816, 831, 845, 860, 874, 889, 904, 920, 935, 951, 966, 982,
+    999, 1015, 1031, 1048, 1065, 1082, 1099, 1116, 1134, 1152, 1170, 1188, 1206, 1224, 1243, 1262,
+    1281, 1300, 1320, 1339, 1359, 1379, 1399, 1420, 1440, 1461, 1482, 1503, 1525, 1546, 1568, 1590,
+    1612, 1635, 1657, 1680, 1703, 1726, 1750, 1774, 1797, 1822, 1846, 1870, 1895, 1920, 1945, 1971,
+    1996, 2022, 2048, 2074, 2101, 2128, 2155, 2182, 2209, 2237, 2265, 2293, 2321, 2350, 2378, 2407,
+    2437, 2466, 2496, 2526, 2556, 2587, 2617, 2648, 2679, 2711, 2743, 2774, 2807, 2839, 2872, 2905,
+    2938, 2971, 3005, 3039, 3073, 3107, 3142, 3177, 3212, 3248, 3283, 3319, 3356, 3392, 3429, 3466,
+    3503, 3541, 3578, 3617, 3655, 3694, 3732, 3772, 3811, 3851, 3891, 3931, 3972, 4012, 4054, 4095};
 #else
 static const uint16_t lut[256] = {
     0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5, 5, 6, 6, 7,
@@ -137,7 +137,7 @@ static volatile uint32_t row_in_bit_plane = 0;
 
 // Accumulator precision has to fit the lut precision.
 #ifndef ACC_BITS
-#define ACC_BITS 16
+#define ACC_BITS 12
 #endif
 
 // Derived constants
@@ -896,77 +896,40 @@ static inline int claim_dma_channel(const char *channel_name)
 }
 
 #ifdef TEMPORAL_DITHERING
-// Frame-phase pseudo-random noise generator
-static inline uint16_t frame_noise(uint32_t seed)
-{
-    seed ^= seed >> 3;
-    seed ^= seed << 7;
-    seed ^= seed >> 5;
-    return (uint16_t)(seed & 0xFF);
-}
-
 // Main temporal dithering: 8→16→10 bit
 uint32_t temporal_dithering(size_t j, uint32_t pixel)
 {
     // --- 1. Expand 8-bit RGB using LUT ---
-    uint16_t b16 = lut[(pixel >> 16) & 0xFF];
-    uint16_t g16 = lut[(pixel >> 8) & 0xFF];
-    uint16_t r16 = lut[(pixel >> 0) & 0xFF];
+    uint32_t b16 = lut[(pixel >> 16) & 0xFF];
+    uint32_t g16 = lut[(pixel >> 8) & 0xFF];
+    uint32_t r16 = lut[(pixel >> 0) & 0xFF];
 
-    // --- 2. Add previous frame residual and decorrelating noise ---
-    // uint16_t noise = frame_noise((uint32_t)j * 1315423911u);
-
-    uint32_t new_r = (uint32_t)r16 + acc_r[j]; // + (noise & 0x1F); // ±32 jitter
-    uint32_t new_g = (uint32_t)g16 + acc_g[j]; // + ((noise >> 3) & 0x1F);
-    uint32_t new_b = (uint32_t)b16 + acc_b[j]; // + ((noise >> 6) & 0x1F);
+    uint32_t new_r = (uint32_t)r16 + acc_r[j];
+    uint32_t new_g = (uint32_t)g16 + acc_g[j];
+    uint32_t new_b = (uint32_t)b16 + acc_b[j];
 
     // --- 3. Clamp to 16-bit maximum ---
-    if (new_r > 65535)
-        new_r = 65535;
-    if (new_g > 65535)
-        new_g = 65535;
-    if (new_b > 65535)
-        new_b = 65535;
+    if (new_r > 4095)
+        new_r = 4095;
+    if (new_g > 4095)
+        new_g = 4095;
+    if (new_b > 4095)
+        new_b = 4095;
 
     // --- 4. Quantize to 10-bit output and compute fractional error ---
-    // Scale 16-bit → 10-bit (divide by 64)
-    uint16_t out_r = new_r >> ACC_SHIFT;
-    uint16_t out_g = new_g >> ACC_SHIFT;
-    uint16_t out_b = new_b >> ACC_SHIFT;
+    // Scale 12-bit → 10-bit (divide by 64)
+    uint32_t out_r = new_r >> ACC_SHIFT;
+    uint32_t out_g = new_g >> ACC_SHIFT;
+    uint32_t out_b = new_b >> ACC_SHIFT;
 
     // Residual = remainder of division (fractional component)
-    acc_r[j] = new_r & 0x3F;
-    acc_g[j] = new_g & 0x3F;
-    acc_b[j] = new_b & 0x3F;
+    acc_r[j] = new_r & 0x3;
+    acc_g[j] = new_g & 0x3;
+    acc_b[j] = new_b & 0x3;
 
     // --- 5. Recombine into packed 0xRRGGBB10-bit-style integer ---
     return (out_r << 20) | (out_g << 10) | out_b;
 }
-
-// inline __attribute__((always_inline)) uint32_t temporal_dithering(size_t j, uint32_t pixel)
-// {
-//     uint8_t r = (pixel & 0x0000ff) >> 0;
-//     uint8_t g = (pixel & 0x00ff00) >> 8;
-//     uint8_t b = (pixel & 0xff0000) >> 16;
-
-//     // Add higher precision (14-bit) mapped values into accumulator
-//     acc_r[j] += lut[r];
-//     acc_g[j] += lut[g];
-//     acc_b[j] += lut[b];
-
-//     // Quantize down to 10-bit output
-//     uint32_t out_r = acc_r[j] >> ACC_SHIFT; // 10 bits
-//     uint32_t out_g = acc_g[j] >> ACC_SHIFT;
-//     uint32_t out_b = acc_b[j] >> ACC_SHIFT;
-
-//     // Subtract used portion, keep remainder for error feedback
-//     acc_r[j] -= (out_r << ACC_SHIFT);
-//     acc_g[j] -= (out_g << ACC_SHIFT);
-//     acc_b[j] -= (out_b << ACC_SHIFT);
-
-//     return (out_b << 20) | (out_g << 10) | out_r;
-// }
-
 
 /**
  * @brief Update frame_buffer from PicoGraphics source (RGB888 / packed 32-bit),
@@ -1066,83 +1029,36 @@ __attribute__((optimize("unroll-loops"))) void update(
 uint32_t temporal_dithering_bgr(size_t j, uint8_t b, uint8_t g, uint8_t r)
 {
     // --- 1. Expand 8-bit RGB using LUT ---
-    uint16_t b16 = lut[b];
-    uint16_t g16 = lut[g];
-    uint16_t r16 = lut[r];
+    uint32_t b16 = lut[b];
+    uint32_t g16 = lut[g];
+    uint32_t r16 = lut[r];
 
-    // --- 2. Add previous frame residual and decorrelating noise ---
-    // uint16_t noise = frame_noise((uint32_t)j * 1315423911u);
-
-    uint32_t new_r = (uint32_t)r16 + acc_r[j]; // + (noise & 0x1F); // ±32 jitter
-    uint32_t new_g = (uint32_t)g16 + acc_g[j]; // + ((noise >> 3) & 0x1F);
-    uint32_t new_b = (uint32_t)b16 + acc_b[j]; // + ((noise >> 6) & 0x1F);
+    uint32_t new_r = (uint32_t)r16 + acc_r[j];
+    uint32_t new_g = (uint32_t)g16 + acc_g[j];
+    uint32_t new_b = (uint32_t)b16 + acc_b[j];
 
     // --- 3. Clamp to 16-bit maximum ---
-    if (new_r > 65535)
-        new_r = 65535;
-    if (new_g > 65535)
-        new_g = 65535;
-    if (new_b > 65535)
-        new_b = 65535;
+    if (new_r > 4095)
+        new_r = 4095;
+    if (new_g > 4095)
+        new_g = 4095;
+    if (new_b > 4095)
+        new_b = 4095;
 
     // --- 4. Quantize to 10-bit output and compute fractional error ---
     // Scale 16-bit → 10-bit (divide by 64)
-    uint16_t out_r = new_r >> ACC_SHIFT;
-    uint16_t out_g = new_g >> ACC_SHIFT;
-    uint16_t out_b = new_b >> ACC_SHIFT;
+    uint32_t out_r = new_r >> ACC_SHIFT;
+    uint32_t out_g = new_g >> ACC_SHIFT;
+    uint32_t out_b = new_b >> ACC_SHIFT;
 
     // Residual = remainder of division (fractional component)
-    acc_r[j] = new_r & 0x3F;
-    acc_g[j] = new_g & 0x3F;
-    acc_b[j] = new_b & 0x3F;
+    acc_r[j] = new_r & 0x3;
+    acc_g[j] = new_g & 0x3;
+    acc_b[j] = new_b & 0x3;
 
     // --- 5. Recombine into packed 0xRRGGBB10-bit-style integer ---
     return (out_b << 20) | (out_g << 10) | out_r;
 }
-
-// inline __attribute__((always_inline)) uint32_t temporal_dithering(size_t j, uint32_t pixel)
-// {
-//     uint8_t r = (pixel & 0x0000ff) >> 0;
-//     uint8_t g = (pixel & 0x00ff00) >> 8;
-//     uint8_t b = (pixel & 0xff0000) >> 16;
-
-//     // Add higher precision (14-bit) mapped values into accumulator
-//     acc_r[j] += lut[r];
-//     acc_g[j] += lut[g];
-//     acc_b[j] += lut[b];
-
-//     // Quantize down to 10-bit output
-//     uint32_t out_r = acc_r[j] >> ACC_SHIFT;
-//     uint32_t out_g = acc_g[j] >> ACC_SHIFT;
-//     uint32_t out_b = acc_b[j] >> ACC_SHIFT;
-
-//     // Subtract used portion, keep remainder for error feedback
-//     acc_r[j] -= (out_r << ACC_SHIFT);
-//     acc_g[j] -= (out_g << ACC_SHIFT);
-//     acc_b[j] -= (out_b << ACC_SHIFT);
-
-//     return (out_r << 20) | (out_g << 10) | out_b;
-// }
-
-// inline __attribute__((always_inline)) uint32_t temporal_dithering_bgr(size_t j, uint8_t b, uint8_t g, uint8_t r)
-// {
-//     // Add higher precision (16-bit) mapped values into accumulator
-//     acc_r[j] += lut[r];
-//     acc_g[j] += lut[g];
-//     acc_b[j] += lut[b];
-
-//     // Quantize down to 10-bit output
-//     uint32_t out_r = acc_r[j] >> ACC_SHIFT;
-//     uint32_t out_g = acc_g[j] >> ACC_SHIFT;
-//     uint32_t out_b = acc_b[j] >> ACC_SHIFT;
-
-//     // Subtract used portion, keep remainder for error feedback
-//     acc_r[j] -= (out_r << ACC_SHIFT);
-//     acc_g[j] -= (out_g << ACC_SHIFT);
-//     acc_b[j] -= (out_b << ACC_SHIFT);
-
-//     return (out_r << 20) | (out_g << 10) | out_b;
-// }
 
 /**
  * @brief Updates the frame buffer with pixel data from the source array.
