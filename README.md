@@ -615,12 +615,40 @@ Jürgen
 
 There had been several impediments to be surmounted with this 32x16 matrix panel.
 - I couldn't find a data sheet for the 74HC138**B** chip. I had assumed that this chip was a variant of the 74HC138 and 74HCT138 chip types, which are 3-to-8-line decoders/demultiplexers. If the 74HC138**B** chip were the same as these chips, the matrix panel would perform 2-wire multiplexing and use 3 pins for row addressing. However, since this 32x16 matrix panel performs 4-wire multiplexing, it only needs to address 4 lines to cover all 16 rows, which is possible with 2 address pins. This result is reflected in the code with this definition `#define ROWSEL_N_PINS 2`.
-- It took me some time to understand and program the pixel mapping for this matrix panel. During development, I had to reduce the system clock frequency to 25,000 Hz. Ghosting misled me several times regarding the pixel mapping of the matrix panel.
-- I conducted some experiments in the .program hub75_row method in the hub75.pio file to reduce ghosting. But this is based on guesswork. More research needs to be done to find out how this matrix panel can handle higher system clock frequencies. If that fails one way to go might be to reduce DMA or PIO speed to make the matrix panel independent of the system clock.
+- It took me some time to understand and program the pixel mapping for this matrix panel. During development, I had to reduce the system clock frequency to 25,000 Hz otherwise the pixel mapping of the matrix panel changed and mislead me several times.
+- I conducted some experiments in the .program hub75_row method in the hub75.pio file to reduce black pixel lit in a shadow green when they should be completely black. But this is based on guesswork. More research needs to be done to find out how this matrix panel can handle higher system clock frequencies. At the moment it is acceptable
 
-In [Electrodragon Discussion](https://rpi-rgb-led-matrix.discourse.group/t/electrodragon-2x2-matrix-of-64x32-panel-4-blank/1096/4) it is referenced that RUL6024 boards need to be initialised similar to FM6216 boards.
+In [Electrodragon Discussion](https://rpi-rgb-led-matrix.discourse.group/t/electrodragon-2x2-matrix-of-64x32-panel-4-blank/1096/4) it is referenced that RUL6024 boards need to be initialised similar to FM6216 boards. Mmmh, it is working for me without an initial code sequence as type generic (#define PANEL_TYPE PANEL_GENERIC). 
+But I will do some experiments on this.
 
-In some inline comment (which I can not find any more) was noted that the panel should be worked on line-wise and not plane-wise as this would show some black pixel as green (as it does with my panel)
+In some inline comment (probably in the DMD_STM project, but I cannot say for sure) was noted that the matrix panel should be driven with line-wise binary code modulation (BCM) and not plane-wise BCM as this would show some black pixel as green (as it does with the panel you send me).
+This did improve things! Before I had to reduce the system clock to a maximum of 30 kHz. Faster clocking did duplicate pixels or pixel were placed in false positions without code changes!
+
+Current state of the 32x16 matrix panel with a RUL6024 logic IC, a RUC72580 switch and 74HC138**B** multiplexer:
+
+- configuration
+  
+      two address lines on the matrix panel board
+  
+      4-wire multiplexing, so 4 lines are simultaneously displayed
+
+      8-bits per color channel are expanded to 10 bits per color chanel via look-up table - this results in 10 bit planes used with binary coded modulation
+
+      temporal dithering working but still in progress
+  
+- examples work even with high system clock up to 250 kHz
+- no initialising sequence needed - has to be confirmed
+- testing of temporal dithering has to be done
+- some restructuring of code aiming to ease the configuration parameters (all at one place probably in an include file)
+- regression test to see all other matrix panels still work
+
+If everything works out I am planning to push my branch to github. If you confirm it working I will merge into the main branch.
+
+Kind regards
+Jürgen
+
+
+
 
 List of [board707 supported panels](https://github.com/board707/DMD_STM32/wiki/Led_drivers)
 

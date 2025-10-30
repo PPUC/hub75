@@ -10,11 +10,21 @@ inline float AntialiasedLine::fPartOfNumber(float x)
 // Optimized color brightness function with minimal floating-point operations
 uint32_t AntialiasedLine::color_brightness(uint32_t color, float brightness)
 {
+    brightness = std::clamp(brightness, 0.0f, 1.0f);
     uint32_t r = ((color >> 16) & 0xFF) * brightness + 0.5f;
     uint32_t g = ((color >> 8) & 0xFF) * brightness + 0.5f;
     uint32_t b = (color & 0xFF) * brightness + 0.5f;
     return (r << 16) | (g << 8) | b;
 }
+
+// inline uint32_t AntialiasedLine::color_brightness(uint32_t color, float brightness)
+// {
+//     brightness = std::clamp(brightness, 0.0f, 1.0f);
+//     uint32_t r = std::min((uint32_t)255u, (uint32_t)(((color >> 16) & 0xFF) * brightness + 0.5f));
+//     uint32_t g = std::min(255u, (uint32_t)(((color >> 8) & 0xFF) * brightness + 0.5f));
+//     uint32_t b = std::min(255u, (uint32_t)((color & 0xFF) * brightness + 0.5f));
+//     return (r << 16) | (g << 8) | b;
+// }
 
 void AntialiasedLine::drawLine(float x1, float y1, float x2, float y2, uint32_t color)
 {

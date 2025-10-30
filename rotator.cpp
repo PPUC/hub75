@@ -12,6 +12,9 @@ private:
     uint w = 64;
     uint h = 64;
 
+    float cx = 31;
+    float cy = 31;
+
     float rx = 1.0f;
     float ry = 1.0f;
     float r = 30.0f;
@@ -22,7 +25,7 @@ private:
     uint32_t col = 0xffff00;
 
 public:
-    explicit Rotator(uint width = 64, uint height = 64) : AntialiasedLine(width, height), w(width), h(height) {}
+    explicit Rotator(float center_x = 31.0, float center_y = 31.0, float radius = 15.0, uint width = 64, uint height = 64) : AntialiasedLine(width, height), cx(center_x), cy(center_y), r(radius), w(width), h(height) {}
 
     void draw_line()
     {
@@ -33,7 +36,7 @@ public:
         float c = cos(a);
         float s = sin(a);
 
-        r = std::clamp(r + incr, 0.0f, 30.0f);
+        // r = std::clamp(r + incr, 0.0f, radius);
 
         rx = r * c;
         ry = r * s;
@@ -44,6 +47,9 @@ public:
 
         float centerX = w / 2.0f;
         float centerY = h / 2.0f;
+
+        drawLine(0, 0, w-1, h-1, 0xff0000);
+        drawLine(0, h-1, w-1, 0, 0x00ff00);
 
         drawLine(rx + centerX, ry + centerY, -rx + centerX, -ry + centerY, col);
     }

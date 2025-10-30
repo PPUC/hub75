@@ -14,7 +14,7 @@
 
 // Example images
 #include "vanessa_mai_64x64.h"
-#include "taylor_swift_32x16.h"
+#include "color_image.h"
 
 // Example effects
 #include "antialiased_line.hpp"
@@ -34,7 +34,7 @@
 // To suppress this effect set PANEL_TYPE to PANEL_GENERIC.
 
 // PanelType - either PANEL_GENERIC or PANEL_FM6126A
-#define PANEL_TYPE PANEL_FM6126A
+#define PANEL_TYPE PANEL_GENERIC
 
 // Some matrix panels have inverted STROBE signals.
 // If your data-sheet says so set STB_INVERTED to true.
@@ -115,7 +115,7 @@ void core1_entry()
 void initialize()
 {
     // Set system clock to 250MHz - just to show that it is possible to drive the HUB75 panel with a high clock speed
-    set_sys_clock_khz(150000, true);
+    set_sys_clock_khz(250000, true);
 
     stdio_init_all(); // Initialize Pico SDK
 
@@ -138,7 +138,7 @@ int main()
     BouncingBalls bouncingBalls(3, RGB_MATRIX_WIDTH, RGB_MATRIX_HEIGHT);
 
     // Create rotating antialiased line using pico_graphics functionality - image data is delivered in uint32_t array with 24-bit (rgb888) color data format
-    Rotator rotator(RGB_MATRIX_WIDTH, RGB_MATRIX_HEIGHT);
+    Rotator rotator(RGB_MATRIX_WIDTH>>1, RGB_MATRIX_HEIGHT>>1, RGB_MATRIX_HEIGHT / 2.0f, RGB_MATRIX_WIDTH, RGB_MATRIX_HEIGHT);
 
     // Create fire effect using pico_graphics functionality - image data is delivered in uint32_t array with 24-bit (rgb888) color data format
     FireEffect fireEffect = FireEffect(RGB_MATRIX_WIDTH, RGB_MATRIX_HEIGHT);
@@ -179,13 +179,13 @@ int main()
         {
             // Taylor Swift - image data is in b8, g8, r8 format
             // By iHeartRadioCA, CC BY 3.0, https://commons.wikimedia.org/w/index.php?curid=137551448
-            update_bgr(taylor_swift_32x16);
+            update_bgr(color_image);
         }
         else if (demo_index == 3)
         {
             // Image data is in r8, g8, b8 format
-            rotator.draw_line();
-            update(&rotator);
+            pixelFill.fill(0, RGB_MATRIX_WIDTH * RGB_MATRIX_HEIGHT);
+            update(&pixelFill);
         }
         else if (demo_index == 4)
         {
@@ -202,8 +202,9 @@ int main()
         }
         else if (demo_index == 6)
         {
-            pixelFill.fill(0, RGB_MATRIX_WIDTH * RGB_MATRIX_HEIGHT);
-            update(&pixelFill);
+            // Image data is in r8, g8, b8 format
+            rotator.draw_line();
+            update(&rotator);
         }
 
         // matrix panel brightness will vary
