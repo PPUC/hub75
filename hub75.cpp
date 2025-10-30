@@ -281,7 +281,7 @@ static void oen_finished_handler()
 
     // Advance row addressing; reset and increment bit-plane if needed
 #ifdef HUB75_MULTIPLEX_2_ROWS
-    // plane wise BCM
+    // plane wise BCM (Binary Coded Modulation)
     if (++row_address >= (height >> 1))
     {
         row_address = 0;
@@ -294,7 +294,7 @@ static void oen_finished_handler()
     }
 #elif defined HUB75_MULTIPLEX_4_ROWS
     // line wise BCM (Binary Coded Modulation)
-    // not so fast as plane wise BCM but the matrix panel lits pixels it should not lit otherwise
+    // calls hub75_data_rgb888_set_shift more often than plane wise BCM
     hub75_data_rgb888_set_shift(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, bit_plane);
     if (++bit_plane >= BIT_DEPTH)
     {
@@ -904,6 +904,7 @@ uint32_t temporal_dithering(size_t j, uint32_t pixel)
     uint32_t g16 = lut[(pixel >> 8) & 0xFF];
     uint32_t r16 = lut[(pixel >> 0) & 0xFF];
 
+    // --- 2. Add residue ---
     uint32_t new_r = (uint32_t)r16 + acc_r[j];
     uint32_t new_g = (uint32_t)g16 + acc_g[j];
     uint32_t new_b = (uint32_t)b16 + acc_b[j];
@@ -1026,13 +1027,14 @@ __attribute__((optimize("unroll-loops"))) void update(
 
 #ifdef TEMPORAL_DITHERING
 // Main temporal dithering: 8→16→10 bit
-uint32_t temporal_dithering_bgr(size_t j, uint8_t b, uint8_t g, uint8_t r)
+uint32_t temporal_dithering(size_t j, uint8_t b, uint8_t g, uint8_t r)
 {
     // --- 1. Expand 8-bit RGB using LUT ---
     uint32_t b16 = lut[b];
     uint32_t g16 = lut[g];
     uint32_t r16 = lut[r];
 
+    // --- 2. Add residue  ---
     uint32_t new_r = (uint32_t)r16 + acc_r[j];
     uint32_t new_g = (uint32_t)g16 + acc_g[j];
     uint32_t new_b = (uint32_t)b16 + acc_b[j];
@@ -1075,8 +1077,8 @@ __attribute__((optimize("unroll-loops"))) void update_bgr(const uint8_t *src)
 #ifdef HUB75_MULTIPLEX_2_ROWS
     for (size_t i = 0, j = 0; i < pixels; j += 3, i += 2)
     {
-        frame_buffer[i] = temporal_dithering_bgr(i, src[j], src[j + 1], src[j + 2]);
-        frame_buffer[i + 1] = temporal_dithering_bgr(i, src[rgb_offset + j], src[rgb_offset + j + 1], src[rgb_offset + j + 2]);
+        frame_buffer[i] = temporal_dithering(i, src[j], src[j + 1], src[j + 2]);
+        frame_buffer[i + 1] = temporal_dithering(i, src[rgb_offset + j], src[rgb_offset + j + 1], src[rgb_offset + j + 2]);
     }
 #elif defined HUB75_MULTIPLEX_4_ROWS
     const int eight_rows_offset = 8 * width * 3;
@@ -1085,8 +1087,8 @@ __attribute__((optimize("unroll-loops"))) void update_bgr(const uint8_t *src)
     for (int j = 0, fb_index = 0; j < total_pixels; ++j, fb_index += 2)
     {
         uint32_t index = src_map[j];
-        frame_buffer[fb_index] = temporal_dithering_bgr(index, src[index * 3], src[index * 3 + 1], src[index * 3 + 2]);                                                                 // (lut[src[index * 3]] << 20) | (lut[src[index * 3 + 1]] << 10) | (lut[src[index * 3 + 2]]);
-        frame_buffer[fb_index + 1] = temporal_dithering_bgr(index, src[index * 3 + eight_rows_offset], src[index * 3 + 1 + eight_rows_offset], src[index * 3 + 2 + eight_rows_offset]); // (lut[src[index * 3 + eight_rows_offset]] << 20) | (lut[src[index * 3 + 1 + eight_rows_offset]] << 10) | (lut[src[index * 3 + 2 + eight_rows_offset]]);
+        frame_buffer[fb_index] = temporal_dithering(index, src[index * 3], src[index * 3 + 1], src[index * 3 + 2]);                                                                 // (lut[src[index * 3]] << 20) | (lut[src[index * 3 + 1]] << 10) | (lut[src[index * 3 + 2]]);
+        frame_buffer[fb_index + 1] = temporal_dithering(index, src[index * 3 + eight_rows_offset], src[index * 3 + 1 + eight_rows_offset], src[index * 3 + 2 + eight_rows_offset]); // (lut[src[index * 3 + eight_rows_offset]] << 20) | (lut[src[index * 3 + 1 + eight_rows_offset]] << 10) | (lut[src[index * 3 + 2 + eight_rows_offset]]);
     }
 #endif
 }
