@@ -90,7 +90,7 @@
 //                               01：10ns
 //                               11: 20ns
 //                       0b00
-#define R_OE 0b00 
+#define R_OE 0b01 
 
 #define WREG2 R_OE_CH | R_TDM | R_UPCTRL | R_FALL_TIME | R_LATCH | R_UPCH | R_EN_AM | ROUT2 | R_CLK_SDO | R_OE
 

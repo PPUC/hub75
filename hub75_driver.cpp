@@ -13,7 +13,7 @@
 #include "hub75.hpp"
 
 // Example images
-#include "vanessa_mai_64x64.h"
+#include "matreshka_32x16.h"
 #include "color_image.h"
 
 // Example effects
@@ -34,7 +34,7 @@
 // To suppress this effect set PANEL_TYPE to PANEL_GENERIC.
 
 // PanelType - either PANEL_GENERIC or PANEL_FM6126A
-#define PANEL_TYPE PANEL_GENERIC
+#define PANEL_TYPE PANEL_FM6126A
 
 // Some matrix panels have inverted STROBE signals.
 // If your data-sheet says so set STB_INVERTED to true.
@@ -198,7 +198,7 @@ int main()
         {
             // Vanessa Mai - image data is in b8, g8, r8 format
             // By Lanzunlimited, CC BY-SA 4.0, https://commons.wikimedia.org/w/index.php?curid=87037267
-            update_bgr(vanessa_mai_64x64);
+            update_bgr(matreshka_32x16);
         }
         else if (demo_index == 6)
         {

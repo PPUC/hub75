@@ -1,10 +1,9 @@
-#include <stdint.h>
-#include <stddef.h>
+#include <cstdlib>
+#include <vector>
 
 #include "pico/stdlib.h"
 
 #include "hardware/dma.h"
-#include "hardware/pio.h"
 #include "pico/sync.h"
 
 #include "hub75.hpp"
@@ -23,7 +22,7 @@
 
 #define EXIT_FAILURE 1
 
-#define TEMPORAL_DITHERING // use temporal dithering - remove define to use no dithering
+// #define TEMPORAL_DITHERING // use temporal dithering - remove define to use no dithering
 
 // Scan rate 1 : 32 for a 64x64 matrix panel means 64 pixel height divided by 32 pixel results in 2 rows lit simultaneously.
 // Scan rate 1 : 16 for a 64x64 matrix panel means 64 pixel height divided by 16 pixel results in 4 rows lit simultaneously.
@@ -144,9 +143,7 @@ static volatile uint32_t row_in_bit_plane = 0;
 static const int ACC_SHIFT = (ACC_BITS - 10); // number of low bits preserved in accumulator
 
 // Per-channel accumulators (allocated at runtime)
-static uint32_t *acc_r = nullptr;
-static uint32_t *acc_g = nullptr;
-static uint32_t *acc_b = nullptr;
+static std::vector<uint32_t> acc_r, acc_g, acc_b;
 
 // Variables for brightness control
 // Q format shift: Q16 gives 1.0 == (1 << 16) == 65536
@@ -159,13 +156,13 @@ static volatile uint32_t brightness_fp = (1u << BRIGHTNESS_FP_SHIFT); // default
 static volatile uint32_t scaled_basis[BIT_DEPTH];
 
 // Basis factor (coarse brightness)
-static volatile uint32_t basis_factor = 6u;
+static volatile uint32_t basis_factor = 1u;
 
 inline __attribute__((always_inline)) uint32_t set_row_in_bit_plane(uint32_t row_address, uint32_t bit_plane)
 {
     // scaled_basis[bit_plane] already includes brightness scaling.
     // left shift by ROWSEL_N_PINS to form the OEn-length encoding.
-    return row_address | (scaled_basis[bit_plane] << ROWSEL_N_PINS);
+    return row_address | (scaled_basis[bit_plane] << 5 /*ROWSEL_N_PINS*/);
 }
 
 // Recompute scaled_basis[] using a temporary array and swap under IRQ protection.
@@ -234,12 +231,15 @@ void setIntensity(float intensity)
  * This must be called after width and height are set and after the frame_buffer allocation.
  * Allocates three arrays of width*height uint32 accumulators (R, G, B) and zero-initializes them.
  */
-static void init_accumulators()
+static void init_accumulators(std::size_t pixel_count)
 {
-    const size_t pixels = (size_t)width * (size_t)height;
-    acc_r = new uint32_t[pixels](); // value-initialized to 0
-    acc_g = new uint32_t[pixels]();
-    acc_b = new uint32_t[pixels]();
+    // const size_t pixels = (size_t)width * (size_t)height;
+    // acc_r = new uint32_t[pixels](); // value-initialized to 0
+    // acc_g = new uint32_t[pixels]();
+    // acc_b = new uint32_t[pixels]();
+    acc_r.assign(pixel_count, 0);
+    acc_g.assign(pixel_count, 0);
+    acc_b.assign(pixel_count, 0);
 }
 
 /**
@@ -247,24 +247,24 @@ static void init_accumulators()
  *
  * Call this during cleanup when you free frame_buffer.
  */
-static void free_accumulators()
-{
-    if (acc_r)
-    {
-        delete[] acc_r;
-        acc_r = nullptr;
-    }
-    if (acc_g)
-    {
-        delete[] acc_g;
-        acc_g = nullptr;
-    }
-    if (acc_b)
-    {
-        delete[] acc_b;
-        acc_b = nullptr;
-    }
-}
+// static void free_accumulators()
+// {
+//     if (acc_r)
+//     {
+//         delete[] acc_r;
+//         acc_r = nullptr;
+//     }
+//     if (acc_g)
+//     {
+//         delete[] acc_g;
+//         acc_g = nullptr;
+//     }
+//     if (acc_b)
+//     {
+//         delete[] acc_b;
+//         acc_b = nullptr;
+//     }
+// }
 
 /**
  * @brief Interrupt handler for the Output Enable (OEn) finished event.
@@ -308,6 +308,8 @@ static void oen_finished_handler()
 
     // Compute address and length of OEn pulse for next row
     row_in_bit_plane = set_row_in_bit_plane(row_address, bit_plane);
+
+        // row_in_bit_plane = row_address | ((6u << bit_plane) << 5);
     dma_channel_set_read_addr(oen_chan, &row_in_bit_plane, false);
 
     // Restart DMA channels for the next row's data transfer
@@ -402,8 +404,11 @@ void FM6126A_init_register()
 
 void FM6126A_write_register(uint16_t value, uint8_t position)
 {
-    gpio_put(CLK_PIN, !clk_polarity);
-    gpio_put(STROBE_PIN, !stb_polarity);
+    gpio_put(OEN_PIN, HIGH);
+    gpio_put(CLK_PIN, LOW);
+    gpio_put(STROBE_PIN, LOW);
+
+    sleep_ms(10);
 
     uint8_t threshold = width - position;
     for (auto i = 0u; i < width; i++)
@@ -421,10 +426,11 @@ void FM6126A_write_register(uint16_t value, uint8_t position)
         // Assert strobe/latch if i > threshold
         // This somehow indicates to the FM6126A which register we want to write :|
         gpio_put(STROBE_PIN, i > threshold);
-        gpio_put(CLK_PIN, clk_polarity);
-        sleep_us(10);
-        gpio_put(CLK_PIN, !clk_polarity);
+        gpio_put(CLK_PIN, HIGH);
+        sleep_ms(10);
+        gpio_put(CLK_PIN, LOW);
     }
+    gpio_put(OEN_PIN, LOW);
 }
 
 /**
@@ -440,15 +446,25 @@ void FM6126A_setup()
     FM6126A_init_register();
 
     // Ridiculous register write nonsense for the FM6126A-based 64x64 matrix
-    // FM6126A_write_register(0b1111111111111110, 12);
-    // FM6126A_write_register(0b0000010000000000, 13);
+    FM6126A_write_register(0b1111111111111110, 12);
+    FM6126A_write_register(0b0000010000000000, 13);
 
     // FM6126A_write_register(0b1111111111000000, 12);
     // FM6126A_write_register(0b0000000001000000, 13);
 
-    FM6126A_write_register(WREG1, 12);
-    FM6126A_write_register(WREG2, 13);
+    // FM6126A_write_register(WREG1, 12);
+    // FM6126A_write_register(WREG2, 13);
 }
+
+// void FM6126A_setup()
+// {
+//     PIO pio = pio0;
+//     uint sm = 0;
+
+//     FM6126A panel(/*pin_r1=*/DATA_BASE_PIN, /*pin_clk=*/CLK_PIN, /*pin_lat=*/STROBE_PIN, /*pin_oe=*/OEN_PIN);
+
+//     panel.initialize();
+// }
 
 void RUL6024_init_register()
 {
@@ -682,7 +698,6 @@ void RUL6024_setup()
 
 void setup_map()
 {
-
     const int total_pixels = width * height >> 1;
     const int four_rows_offset = width * 4;
 
@@ -693,7 +708,7 @@ void setup_map()
         else
             src_map[j] = j - ((line + 1) << 3) + four_rows_offset;
 
-        if (++counter == 16)
+        if (++counter >= 16)
         {
             counter = 0;
             line++;
@@ -725,12 +740,12 @@ void create_hub75_driver(uint w, uint h, PanelType panel_type, bool inverted_stb
     src_map = new uint16_t[width * height >> 1](); // Precomputed index lookup
 #endif
 
-    init_accumulators();
+    init_accumulators(width * height);
 
     if (panel_type == PANEL_FM6126A)
     {
         // FM6126A_setup();
-        RUL6024_setup();
+        // RUL6024_setup();
     }
 
     configure_pio(inverted_stb);
@@ -900,8 +915,8 @@ static inline int claim_dma_channel(const char *channel_name)
 uint32_t temporal_dithering(size_t j, uint32_t pixel)
 {
     // --- 1. Expand 8-bit RGB using LUT ---
-    uint32_t b16 = lut[(pixel >> 16) & 0xFF];
-    uint32_t g16 = lut[(pixel >> 8) & 0xFF];
+    uint32_t g16 = lut[(pixel >> 16) & 0xFF];
+    uint32_t b16 = lut[(pixel >> 8) & 0xFF];
     uint32_t r16 = lut[(pixel >> 0) & 0xFF];
 
     // --- 2. Add residue ---
@@ -929,7 +944,7 @@ uint32_t temporal_dithering(size_t j, uint32_t pixel)
     acc_b[j] = new_b & 0x3;
 
     // --- 5. Recombine into packed 0xRRGGBB10-bit-style integer ---
-    return (out_r << 20) | (out_g << 10) | out_b;
+    return (out_g << 20) | (out_b << 10) | out_r;
 }
 
 /**
@@ -1081,15 +1096,57 @@ __attribute__((optimize("unroll-loops"))) void update_bgr(const uint8_t *src)
         frame_buffer[i + 1] = temporal_dithering(i, src[rgb_offset + j], src[rgb_offset + j + 1], src[rgb_offset + j + 2]);
     }
 #elif defined HUB75_MULTIPLEX_4_ROWS
-    const int eight_rows_offset = 8 * width * 3;
-    const int total_pixels = (width * height) >> 1;
+        // For four-rows-lit multiplexing we step by 4 and use offsets 0, offset, 2*offset, 3*offset
+        auto i = 0;
+        auto line = 0;
+        auto counter = 0;
+        int four_rows_offset = 4 * width;
+        int eight_rows_offset = 8 * width;
 
-    for (int j = 0, fb_index = 0; j < total_pixels; ++j, fb_index += 2)
-    {
-        uint32_t index = src_map[j];
-        frame_buffer[fb_index] = temporal_dithering(index, src[index * 3], src[index * 3 + 1], src[index * 3 + 2]);                                                                 // (lut[src[index * 3]] << 20) | (lut[src[index * 3 + 1]] << 10) | (lut[src[index * 3 + 2]]);
-        frame_buffer[fb_index + 1] = temporal_dithering(index, src[index * 3 + eight_rows_offset], src[index * 3 + 1 + eight_rows_offset], src[index * 3 + 2 + eight_rows_offset]); // (lut[src[index * 3 + eight_rows_offset]] << 20) | (lut[src[index * 3 + 1 + eight_rows_offset]] << 10) | (lut[src[index * 3 + 2 + eight_rows_offset]]);
-    }
+        int total_pixels = width * height >> 1;
+
+        for (auto j = 0; j < total_pixels; j++)
+        {
+            if ((j % 16) < 8) // (j % 16) < 8
+            {
+                // left side of matrix panel
+                auto segment = line << 3;
+                uint32_t index = j - segment;
+                frame_buffer[i] = lut[src[index*3+2]] << 20 | lut[src[index*3 + 1]] << 10 | lut[src[index*3 + 0]];
+                // frame_buffer[i] = temporal_dithering(index, 0x00/*src[index * 3 + 2]*/, 0x00 /*src[index * 3 + 1]*/, 0x00 /*src[index * 3 + 0]*/); 
+                index += eight_rows_offset;
+                frame_buffer[i+1] = lut[src[index*3+2]] << 20 | lut[src[index*3 + 1]] << 10 | lut[src[index*3 + 0]];
+                // frame_buffer[i + 1] = temporal_dithering(index, 0x00 /*src[index * 3 + 2]*/, 0x00 /*src[index * 3 + 1]*/, 0x00 /*src[index * 3 + 0]*/); 
+            }
+            else
+            {
+                // right side of matrix panel
+                auto segment = (line + 1) << 3;
+                uint32_t index = j - segment + four_rows_offset;
+                frame_buffer[i] = lut[src[index*3+2]] << 20 | lut[src[index*3 + 1]] << 10 | lut[src[index*3 + 0]];
+                // frame_buffer[i] = temporal_dithering(index, src[index * 3 + 2], src[index * 3 + 1], src[index * 3 + 0]); 
+                index += eight_rows_offset;
+                frame_buffer[i+1] = lut[src[index*3+2]] << 20 | lut[src[index*3 + 1]] << 10 | lut[src[index*3 + 0]];
+                // frame_buffer[i + 1] = temporal_dithering(index, src[index * 3 + 2], src[index * 3 + 1], src[index * 3 + 0]); ;
+            }
+            i += 2;
+            if (++counter == 16) // 16 pairs per line → 32 frame_buffer entries
+            {
+                counter = 0;
+                line++;
+            }
+        }
+
+
+    // const int eight_rows_offset = 8 * width * 3;
+    // const int total_pixels = (width * height) >> 1;
+
+    // for (int j = 0, fb_index = 0; j < total_pixels; ++j, fb_index += 2)
+    // {
+    //     uint32_t index = src_map[j];
+    //     frame_buffer[fb_index] = temporal_dithering(index, src[index * 3 + 2], src[index * 3 + 1], src[index * 3 + 0]);                                                                 // (lut[src[index * 3]] << 20) | (lut[src[index * 3 + 1]] << 10) | (lut[src[index * 3 + 2]]);
+    //     frame_buffer[fb_index + 1] = temporal_dithering(index, src[index * 3 + 2 + eight_rows_offset], src[index * 3 + 1 + eight_rows_offset], src[index * 3 + 0 + eight_rows_offset]); // (lut[src[index * 3 + eight_rows_offset]] << 20) | (lut[src[index * 3 + 1 + eight_rows_offset]] << 10) | (lut[src[index * 3 + 2 + eight_rows_offset]]);
+    // }
 #endif
 }
 
