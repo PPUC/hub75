@@ -1178,8 +1178,8 @@ __attribute__((optimize("unroll-loops"))) void update_bgr(const uint8_t *src)
     for (int j = 0, fb_index = 0; j < total_pixels; j += 1, fb_index += 2)
     {
         uint32_t index = src_map[j];
-        frame_buffer[fb_index] = (lut[src[index * 3]] << 20) | (lut[src[index * 3 + 1]] << 10) | (lut[src[index * 3 + 2]]);
-        frame_buffer[fb_index + 1] = (lut[src[(index + eight_rows_offset) * 3]] << 20) | (lut[src[(index + eight_rows_offset) * 3 + 1]] << 10) | (lut[src[(index + eight_rows_offset) * 3 + 2]]);
+        frame_buffer[fb_index] = (lut[src[index * 3 + 2]] << 20) | (lut[src[index * 3 + 1]] << 10) | (lut[src[index * 3 + 0]]);
+        frame_buffer[fb_index + 1] = (lut[src[(index + eight_rows_offset) * 3 + 2]] << 20) | (lut[src[(index + eight_rows_offset) * 3 + 1]] << 10) | (lut[src[(index + eight_rows_offset) * 3 + 0]]);
     }
 #endif
 }
