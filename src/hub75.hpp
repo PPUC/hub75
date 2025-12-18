@@ -19,8 +19,6 @@
 #define OEN_PIN 13
 #endif
 
-#define EXIT_FAILURE 1
-
 // #define TEMPORAL_DITHERING // use temporal dithering - remove define to use no dithering
 
 // Scan rate 1 : 32 for a 64x64 matrix panel means 64 pixel height divided by 32 pixel results in 2 rows lit simultaneously.
