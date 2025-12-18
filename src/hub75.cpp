@@ -732,10 +732,10 @@ void create_hub75_driver(uint w, uint h, PanelType panel_type, bool inverted_stb
  */
 static void configure_pio(bool inverted_stb)
 {
-    pio_claim_free_sm_and_add_program(&hub75_data_rgb888_program, &pio_config.data_pio, &pio_config.sm_data, &pio_config.data_prog_offs);
+    pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_data_rgb888_program, &pio_config.data_pio, &pio_config.sm_data, &pio_config.data_prog_offs, DATA_BASE_PIN, DATA_N_PINS, true);
 
-    if (inverted_stb) pio_claim_free_sm_and_add_program(&hub75_row_inverted_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
-    else pio_claim_free_sm_and_add_program(&hub75_row_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
+    if (inverted_stb) pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_inverted_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, true);
+    else pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, true);
 
     hub75_data_rgb888_program_init(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, DATA_BASE_PIN, CLK_PIN);
     hub75_row_program_init(pio_config.row_pio, pio_config.sm_row, pio_config.row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, STROBE_PIN);
