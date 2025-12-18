@@ -1,0 +1,14 @@
+{
+  "name": "hub75",
+  "description": "pico hub75 driver, adjusted for ZeDMD",
+  "version": "0.1.0",
+  "downloadUrl": "https://github.com/PPUC/hub75/archive/zedmd.zip",
+  "frameworks": "arduino",
+  "platforms": "raspberrypi",
+  "build": {
+    "srcDir": "src",
+    "srcFilter": "+<*>"
+  },
+  "headers": "hub75.hpp",
+  "license": "MIT"
+}

@@ -11,34 +11,6 @@
 
 #include "rul6024.h"
 
-// Wiring of the HUB75 matrix
-#define DATA_BASE_PIN 0
-#define DATA_N_PINS 6
-#define ROWSEL_BASE_PIN 6
-#define ROWSEL_N_PINS 2
-#define CLK_PIN 11
-#define STROBE_PIN 12
-#define OEN_PIN 13
-
-#define EXIT_FAILURE 1
-
-// #define TEMPORAL_DITHERING // use temporal dithering - remove define to use no dithering
-
-// Scan rate 1 : 32 for a 64x64 matrix panel means 64 pixel height divided by 32 pixel results in 2 rows lit simultaneously.
-// Scan rate 1 : 16 for a 64x64 matrix panel means 64 pixel height divided by 16 pixel results in 4 rows lit simultaneously.
-// Scan rate 1 : 16 for a 64x32 matrix panel means 32 pixel height divided by 16 pixel results in 2 rows lit simultaneously.
-// Scan rate 1 : 8 for a 64x32 matrix panel means 32 pixel height divided by 8 pixel results in 4 rows lit simultaneously.
-// Scan rate 1 : 4 for a 32x16 matrix panel means 16 pixel height divided by 4 pixel results in 4 rows lit simultaneously.
-// ...
-// Define either HUB75_MULTIPLEX_2_ROWS or HUB75_MULTIPLEX_2_ROWS to fit your matrix panel.
-
-// #define HUB75_MULTIPLEX_2_ROWS // two rows lit simultaneously
-#define HUB75_MULTIPLEX_4_ROWS // four rows lit simultaneously
-
-#if !defined(HUB75_MULTIPLEX_2_ROWS) && !defined(HUB75_MULTIPLEX_4_ROWS)
-#error "You must define either HUB75_MULTIPLEX_2_ROWS or HUB75_MULTIPLEX_4_ROWS to match your panel's scan rate"
-#endif
-
 // Deduced from https://jared.geek.nz/2013/02/linear-led-pwm/
 // The CIE 1931 lightness formula is what actually describes how we perceive light.
 
@@ -133,11 +105,6 @@ static PioConfig pio_config;
 static volatile uint32_t row_address = 0;
 static volatile uint32_t bit_plane = 0;
 static volatile uint32_t row_in_bit_plane = 0;
-
-// Accumulator precision has to fit the lut precision.
-#ifndef ACC_BITS
-#define ACC_BITS 12
-#endif
 
 // Derived constants
 static const int ACC_SHIFT = (ACC_BITS - 10); // number of low bits preserved in accumulator
@@ -1113,10 +1080,10 @@ __attribute__((optimize("unroll-loops"))) void update_bgr(const uint8_t *src)
                 auto segment = line << 3;
                 uint32_t index = j - segment;
                 frame_buffer[i] = lut[src[index*3+2]] << 20 | lut[src[index*3 + 1]] << 10 | lut[src[index*3 + 0]];
-                // frame_buffer[i] = temporal_dithering(index, 0x00/*src[index * 3 + 2]*/, 0x00 /*src[index * 3 + 1]*/, 0x00 /*src[index * 3 + 0]*/); 
+                // frame_buffer[i] = temporal_dithering(index, 0x00/*src[index * 3 + 2]*/, 0x00 /*src[index * 3 + 1]*/, 0x00 /*src[index * 3 + 0]*/);
                 index += eight_rows_offset;
                 frame_buffer[i+1] = lut[src[index*3+2]] << 20 | lut[src[index*3 + 1]] << 10 | lut[src[index*3 + 0]];
-                // frame_buffer[i + 1] = temporal_dithering(index, 0x00 /*src[index * 3 + 2]*/, 0x00 /*src[index * 3 + 1]*/, 0x00 /*src[index * 3 + 0]*/); 
+                // frame_buffer[i + 1] = temporal_dithering(index, 0x00 /*src[index * 3 + 2]*/, 0x00 /*src[index * 3 + 1]*/, 0x00 /*src[index * 3 + 0]*/);
             }
             else
             {
@@ -1124,7 +1091,7 @@ __attribute__((optimize("unroll-loops"))) void update_bgr(const uint8_t *src)
                 auto segment = (line + 1) << 3;
                 uint32_t index = j - segment + four_rows_offset;
                 frame_buffer[i] = lut[src[index*3+2]] << 20 | lut[src[index*3 + 1]] << 10 | lut[src[index*3 + 0]];
-                // frame_buffer[i] = temporal_dithering(index, src[index * 3 + 2], src[index * 3 + 1], src[index * 3 + 0]); 
+                // frame_buffer[i] = temporal_dithering(index, src[index * 3 + 2], src[index * 3 + 1], src[index * 3 + 0]);
                 index += eight_rows_offset;
                 frame_buffer[i+1] = lut[src[index*3+2]] << 20 | lut[src[index*3 + 1]] << 10 | lut[src[index*3 + 0]];
                 // frame_buffer[i + 1] = temporal_dithering(index, src[index * 3 + 2], src[index * 3 + 1], src[index * 3 + 0]); ;
