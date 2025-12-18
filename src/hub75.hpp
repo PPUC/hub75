@@ -8,7 +8,11 @@
 #ifndef ROWSEL_BASE_PIN
 #define ROWSEL_BASE_PIN 6
 #endif
+#ifdef RUL6024
 #define ROWSEL_N_PINS 2
+#else
+#define ROWSEL_N_PINS 5
+#endif
 #ifndef CLK_PIN
 #define CLK_PIN 11
 #endif
