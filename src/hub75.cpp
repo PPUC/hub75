@@ -337,25 +337,10 @@ void create_hub75_driver(uint w, uint h, uint panel_type = PANEL_TYPE, bool inve
  */
 static void configure_pio(bool inverted_stb)
 {
-    if (!pio_claim_free_sm_and_add_program(&hub75_data_rgb888_program, &pio_config.data_pio, &pio_config.sm_data, &pio_config.data_prog_offs))
-    {
-        fprintf(stderr, "Failed to claim PIO state machine for hub75_data_rgb888_program\n");
-    }
+    pio_claim_free_sm_and_add_program(&hub75_data_rgb888_program, &pio_config.data_pio, &pio_config.sm_data, &pio_config.data_prog_offs);
 
-    if (inverted_stb)
-    {
-        if (!pio_claim_free_sm_and_add_program(&hub75_row_inverted_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs))
-        {
-            fprintf(stderr, "Failed to claim PIO state machine for hub75_row_inverted_program\n");
-        }
-    }
-    else
-    {
-        if (!pio_claim_free_sm_and_add_program(&hub75_row_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs))
-        {
-            fprintf(stderr, "Failed to claim PIO state machine for hub75_row_program\n");
-        }
-    }
+    if (inverted_stb)pio_claim_free_sm_and_add_program(&hub75_row_inverted_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
+    else pio_claim_free_sm_and_add_program(&hub75_row_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
 
     hub75_data_rgb888_program_init(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, DATA_BASE_PIN, CLK_PIN);
     hub75_row_program_init(pio_config.row_pio, pio_config.sm_row, pio_config.row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, STROBE_PIN);
@@ -480,11 +465,6 @@ static void setup_dma_irq()
 static inline int claim_dma_channel(const char *channel_name)
 {
     int dma_channel = dma_claim_unused_channel(true);
-    if (dma_channel < 0)
-    {
-        fprintf(stderr, "Failed to claim DMA channel for %s\n", channel_name);
-        exit(EXIT_FAILURE); // Stop execution
-    }
     return dma_channel;
 }
 

@@ -1,7 +1,5 @@
 #include "pico.h"
 
-#include "libraries/pico_graphics/pico_graphics.hpp"
-
 // See README.md file chapter "How to Configure" for some hints how to adapt the configuration to your panel
 
 // Set MATRIX_PANEL_WIDTH and MATRIX_PANEL_HEIGHT to the width and height of your matrix panel!
@@ -109,7 +107,6 @@ using namespace pimoroni;
 void create_hub75_driver(uint w, uint h, uint pt, bool stb_inverted);
 void start_hub75_driver();
 void update_bgr(const uint8_t *src);
-void update(PicoGraphics const *graphics);
 
 void setBasisBrightness(uint8_t factor);
 void setIntensity(float intensity);
