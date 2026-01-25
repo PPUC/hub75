@@ -102,8 +102,6 @@
 
 #define EXIT_FAILURE 1
 
-using namespace pimoroni;
-
 void create_hub75_driver(uint w, uint h, uint pt, bool stb_inverted);
 void start_hub75_driver();
 void update_bgr(const uint8_t *src);
