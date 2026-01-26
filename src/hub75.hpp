@@ -105,6 +105,12 @@
 #define SM_CLOCKDIV_FACTOR 1.0f
 #endif
 
+// OE blanking cycles subtracted from each bit-plane pulse.
+// Increase to reduce ghosting around latch (ESP32 default often 4).
+#ifndef LATCH_BLANKING
+#define LATCH_BLANKING 0
+#endif
+
 // --- modifications below this line might imply changes in source code ---
 
 #ifdef TEMPORAL_DITHERING

@@ -130,10 +130,19 @@ inline __attribute__((always_inline)) uint32_t set_row_in_bit_plane(uint32_t row
 {
     // scaled_basis[bit_plane] already includes brightness scaling.
     // left shift by 5 to form the OEn-length encoding.
+    uint32_t width = scaled_basis[bit_plane];
+#if LATCH_BLANKING > 0
+    // Subtract blanking on both sides of the pulse to hide latch transition.
+    const uint32_t blank = (uint32_t)LATCH_BLANKING * 2u;
+    if (width > blank)
+        width -= blank;
+    else
+        width = 1;
+#endif
 #ifdef HUB75_LINEDECODER_SM5368
-    return (scaled_basis[bit_plane] << 5);
+    return (width << 5);
 #else
-    return row_address | (scaled_basis[bit_plane] << 5);
+    return row_address | (width << 5);
 #endif
 }
 
