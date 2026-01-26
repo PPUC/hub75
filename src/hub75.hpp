@@ -75,6 +75,15 @@
 // Enable for SM5368 row shift-register line decoder (ABC-only addressing).
 // When enabled, row addressing is shifted via GPIO instead of direct A-E decoding.
 // #define HUB75_LINEDECODER_SM5368
+// Optional SM5368 tuning:
+// #define HUB75_SM5368_BK_LOW        // default keeps BK high
+// #define HUB75_SM5368_SWAP_AC       // swap A (clk) and C (data)
+// #define HUB75_SM5368_EXTRA_CLEAR   // send an extra clear pulse at row 0
+
+// Data clock polarity override (DP3246 uses inverted clock in ESP32 lib)
+// #define HUB75_INVERT_CLK
+// #define HUB75_NO_INVERT_CLK
+
 
 // ICND2153/STP1612PW05/FM6124C init sequence expects number of driver chips in the chain.
 // Default assumes one 16-channel driver per 16 columns (e.g. 128px width -> 8 chips).

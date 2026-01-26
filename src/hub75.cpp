@@ -105,6 +105,7 @@ static volatile uint32_t row_address = 0;
 static volatile uint32_t bit_plane = 0;
 static volatile uint32_t row_in_bit_plane = 0;
 static uint32_t panel_type_current = PANEL_TYPE;
+static bool data_clk_inverted = false;
 
 // Derived constants
 static const int ACC_SHIFT = (ACC_BITS - 10); // number of low bits preserved in accumulator
@@ -153,20 +154,41 @@ static inline void sm5368_init_rows()
     gpio_set_dir(ROWSEL_BASE_PIN + 2, true);
 
     gpio_put(ROWSEL_BASE_PIN + 0, 0);
+#ifdef HUB75_SM5368_BK_LOW
+    gpio_put(ROWSEL_BASE_PIN + 1, 0);
+#else
     gpio_put(ROWSEL_BASE_PIN + 1, 1); // BK high
+#endif
     gpio_put(ROWSEL_BASE_PIN + 2, 0);
 }
 
 static inline void sm5368_step_row(uint32_t row)
 {
     // When row == 0, set row data high for one clock to seed the shift register.
-    gpio_put(ROWSEL_BASE_PIN + 1, 1); // BK high
-    gpio_put(ROWSEL_BASE_PIN + 2, row == 0);
-    gpio_put(ROWSEL_BASE_PIN + 0, 1);
-    gpio_put(ROWSEL_BASE_PIN + 0, 0);
+#ifdef HUB75_SM5368_BK_LOW
+    gpio_put(ROWSEL_BASE_PIN + 1, 0);
+#else
+    gpio_put(ROWSEL_BASE_PIN + 1, 1);
+#endif
+
+#ifdef HUB75_SM5368_SWAP_AC
+    const uint a_pin = ROWSEL_BASE_PIN + 2;
+    const uint c_pin = ROWSEL_BASE_PIN + 0;
+#else
+    const uint a_pin = ROWSEL_BASE_PIN + 0;
+    const uint c_pin = ROWSEL_BASE_PIN + 2;
+#endif
+
+    gpio_put(c_pin, row == 0);
+    gpio_put(a_pin, 1);
+    gpio_put(a_pin, 0);
     if (row == 0)
     {
-        gpio_put(ROWSEL_BASE_PIN + 2, 0);
+        gpio_put(c_pin, 0);
+#ifdef HUB75_SM5368_EXTRA_CLEAR
+        gpio_put(a_pin, 1);
+        gpio_put(a_pin, 0);
+#endif
     }
 }
 #endif
@@ -268,7 +290,10 @@ static void oen_finished_handler()
             bit_plane = 0;
         }
         // Patch the PIO program to make it shift to the next bit plane
-        hub75_data_rgb888_set_shift(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, bit_plane);
+        if (data_clk_inverted)
+            hub75_data_rgb888_invclk_set_shift(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, bit_plane);
+        else
+            hub75_data_rgb888_set_shift(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, bit_plane);
     }
 #elif defined(HUB75_P3_1415_16S_64X64_S31)
     // plane wise BCM (Binary Coded Modulation)
@@ -280,12 +305,18 @@ static void oen_finished_handler()
             bit_plane = 0;
         }
         // Patch the PIO program to make it shift to the next bit plane
-        hub75_data_rgb888_set_shift(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, bit_plane);
+        if (data_clk_inverted)
+            hub75_data_rgb888_invclk_set_shift(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, bit_plane);
+        else
+            hub75_data_rgb888_set_shift(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, bit_plane);
     }
 #elif defined(HUB75_P10_3535_16X32_4S)
     // line wise BCM (Binary Coded Modulation)
     // calls hub75_data_rgb888_set_shift more often than plane wise BCM
-    hub75_data_rgb888_set_shift(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, bit_plane);
+    if (data_clk_inverted)
+        hub75_data_rgb888_invclk_set_shift(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, bit_plane);
+    else
+        hub75_data_rgb888_set_shift(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, bit_plane);
     if (++bit_plane >= BIT_DEPTH)
     {
         bit_plane = 0;
@@ -401,7 +432,18 @@ void create_hub75_driver(uint w, uint h, uint panel_type = PANEL_TYPE, bool inve
  */
 static void configure_pio(bool inverted_stb)
 {
-    pio_claim_free_sm_and_add_program(&hub75_data_rgb888_program, &pio_config.data_pio, &pio_config.sm_data, &pio_config.data_prog_offs);
+    bool invert_clk = (panel_type_current == PANEL_DP3246);
+#ifdef HUB75_INVERT_CLK
+    invert_clk = true;
+#elif defined(HUB75_NO_INVERT_CLK)
+    invert_clk = false;
+#endif
+    data_clk_inverted = invert_clk;
+
+    if (invert_clk)
+        pio_claim_free_sm_and_add_program(&hub75_data_rgb888_invclk_program, &pio_config.data_pio, &pio_config.sm_data, &pio_config.data_prog_offs);
+    else
+        pio_claim_free_sm_and_add_program(&hub75_data_rgb888_program, &pio_config.data_pio, &pio_config.sm_data, &pio_config.data_prog_offs);
 
     if (inverted_stb)
         pio_claim_free_sm_and_add_program(&hub75_row_inverted_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
@@ -415,7 +457,10 @@ static void configure_pio(bool inverted_stb)
                                           &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
 #endif
 
-    hub75_data_rgb888_program_init(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, DATA_BASE_PIN, CLK_PIN);
+    if (invert_clk)
+        hub75_data_rgb888_invclk_program_init(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, DATA_BASE_PIN, CLK_PIN);
+    else
+        hub75_data_rgb888_program_init(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, DATA_BASE_PIN, CLK_PIN);
 #ifdef HUB75_LINEDECODER_SM5368
     if (panel_type_current == PANEL_DP3246)
         hub75_row_noaddr_dp3246_program_init(pio_config.row_pio, pio_config.sm_row, pio_config.row_prog_offs, STROBE_PIN);
