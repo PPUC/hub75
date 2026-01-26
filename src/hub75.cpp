@@ -104,6 +104,7 @@ static PioConfig pio_config;
 static volatile uint32_t row_address = 0;
 static volatile uint32_t bit_plane = 0;
 static volatile uint32_t row_in_bit_plane = 0;
+static uint32_t panel_type_current = PANEL_TYPE;
 
 // Derived constants
 static const int ACC_SHIFT = (ACC_BITS - 10); // number of low bits preserved in accumulator
@@ -344,6 +345,7 @@ void create_hub75_driver(uint w, uint h, uint panel_type = PANEL_TYPE, bool inve
 {
     width = w;
     height = h;
+    panel_type_current = panel_type;
 
     frame_buffer = new uint32_t[width * height](); // Allocate memory for frame buffer and zero-initialize
 
@@ -405,17 +407,25 @@ static void configure_pio(bool inverted_stb)
         pio_claim_free_sm_and_add_program(&hub75_row_inverted_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
 #ifdef HUB75_LINEDECODER_SM5368
     else
-        pio_claim_free_sm_and_add_program(&hub75_row_noaddr_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
+        pio_claim_free_sm_and_add_program((panel_type_current == PANEL_DP3246) ? &hub75_row_noaddr_dp3246_program : &hub75_row_noaddr_program,
+                                          &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
 #else
     else
-        pio_claim_free_sm_and_add_program(&hub75_row_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
+        pio_claim_free_sm_and_add_program((panel_type_current == PANEL_DP3246) ? &hub75_row_dp3246_program : &hub75_row_program,
+                                          &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
 #endif
 
     hub75_data_rgb888_program_init(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, DATA_BASE_PIN, CLK_PIN);
 #ifdef HUB75_LINEDECODER_SM5368
-    hub75_row_noaddr_program_init(pio_config.row_pio, pio_config.sm_row, pio_config.row_prog_offs, STROBE_PIN);
+    if (panel_type_current == PANEL_DP3246)
+        hub75_row_noaddr_dp3246_program_init(pio_config.row_pio, pio_config.sm_row, pio_config.row_prog_offs, STROBE_PIN);
+    else
+        hub75_row_noaddr_program_init(pio_config.row_pio, pio_config.sm_row, pio_config.row_prog_offs, STROBE_PIN);
 #else
-    hub75_row_program_init(pio_config.row_pio, pio_config.sm_row, pio_config.row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, STROBE_PIN);
+    if (panel_type_current == PANEL_DP3246)
+        hub75_row_dp3246_program_init(pio_config.row_pio, pio_config.sm_row, pio_config.row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, STROBE_PIN);
+    else
+        hub75_row_program_init(pio_config.row_pio, pio_config.sm_row, pio_config.row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, STROBE_PIN);
 #endif
 }
 
