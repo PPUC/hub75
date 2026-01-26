@@ -12,6 +12,9 @@
 
 #include "rul6024.h"
 #include "fm6126a.h"
+#include "fm6124.h"
+#include "dp3246.h"
+#include "icnd2153.h"
 
 // Deduced from https://jared.geek.nz/2013/02/linear-led-pwm/
 // The CIE 1931 lightness formula is what actually describes how we perceive light.
@@ -125,8 +128,47 @@ inline __attribute__((always_inline)) uint32_t set_row_in_bit_plane(uint32_t row
 {
     // scaled_basis[bit_plane] already includes brightness scaling.
     // left shift by 5 to form the OEn-length encoding.
+#ifdef HUB75_LINEDECODER_SM5368
+    return (scaled_basis[bit_plane] << 5);
+#else
     return row_address | (scaled_basis[bit_plane] << 5);
+#endif
 }
+
+#ifdef HUB75_LINEDECODER_SM5368
+static inline void sm5368_init_rows()
+{
+    // A is row clock, B is BK, C is row data
+    gpio_init(ROWSEL_BASE_PIN + 0);
+    gpio_set_function(ROWSEL_BASE_PIN + 0, GPIO_FUNC_SIO);
+    gpio_set_dir(ROWSEL_BASE_PIN + 0, true);
+
+    gpio_init(ROWSEL_BASE_PIN + 1);
+    gpio_set_function(ROWSEL_BASE_PIN + 1, GPIO_FUNC_SIO);
+    gpio_set_dir(ROWSEL_BASE_PIN + 1, true);
+
+    gpio_init(ROWSEL_BASE_PIN + 2);
+    gpio_set_function(ROWSEL_BASE_PIN + 2, GPIO_FUNC_SIO);
+    gpio_set_dir(ROWSEL_BASE_PIN + 2, true);
+
+    gpio_put(ROWSEL_BASE_PIN + 0, 0);
+    gpio_put(ROWSEL_BASE_PIN + 1, 1); // BK high
+    gpio_put(ROWSEL_BASE_PIN + 2, 0);
+}
+
+static inline void sm5368_step_row(uint32_t row)
+{
+    // When row == 0, set row data high for one clock to seed the shift register.
+    gpio_put(ROWSEL_BASE_PIN + 1, 1); // BK high
+    gpio_put(ROWSEL_BASE_PIN + 2, row == 0);
+    gpio_put(ROWSEL_BASE_PIN + 0, 1);
+    gpio_put(ROWSEL_BASE_PIN + 0, 0);
+    if (row == 0)
+    {
+        gpio_put(ROWSEL_BASE_PIN + 2, 0);
+    }
+}
+#endif
 
 // Recompute scaled_basis[] using a temporary array and swap under IRQ protection.
 // scaled_basis[b] = (basis_factor << b) * brightness_fp  >> BRIGHTNESS_FP_SHIFT
@@ -253,6 +295,10 @@ static void oen_finished_handler()
     };
 #endif
 
+#ifdef HUB75_LINEDECODER_SM5368
+    sm5368_step_row(row_address);
+#endif
+
     // Compute address and length of OEn pulse for next row
     row_in_bit_plane = set_row_in_bit_plane(row_address, bit_plane);
 
@@ -319,8 +365,24 @@ void create_hub75_driver(uint w, uint h, uint panel_type = PANEL_TYPE, bool inve
     {
         RUL6024_setup();
     }
+    else if (panel_type == PANEL_ICND2153 || panel_type == PANEL_STP1612PW05 || panel_type == PANEL_FM6124C)
+    {
+        ICND2153_setup(ICND2153_CHIP_NUM);
+    }
+    else if (panel_type == PANEL_FM6124 || panel_type == PANEL_ICN2038S)
+    {
+        FM6124_setup();
+    }
+    else if (panel_type == PANEL_DP3246)
+    {
+        DP3246_setup();
+    }
 
     configure_pio(inverted_stb);
+#ifdef HUB75_LINEDECODER_SM5368
+    sm5368_init_rows();
+    sm5368_step_row(0);
+#endif
     configure_dma_channels();
     setup_dma_transfers();
     setup_dma_irq();
@@ -339,11 +401,22 @@ static void configure_pio(bool inverted_stb)
 {
     pio_claim_free_sm_and_add_program(&hub75_data_rgb888_program, &pio_config.data_pio, &pio_config.sm_data, &pio_config.data_prog_offs);
 
-    if (inverted_stb)pio_claim_free_sm_and_add_program(&hub75_row_inverted_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
-    else pio_claim_free_sm_and_add_program(&hub75_row_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
+    if (inverted_stb)
+        pio_claim_free_sm_and_add_program(&hub75_row_inverted_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
+#ifdef HUB75_LINEDECODER_SM5368
+    else
+        pio_claim_free_sm_and_add_program(&hub75_row_noaddr_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
+#else
+    else
+        pio_claim_free_sm_and_add_program(&hub75_row_program, &pio_config.row_pio, &pio_config.sm_row, &pio_config.row_prog_offs);
+#endif
 
     hub75_data_rgb888_program_init(pio_config.data_pio, pio_config.sm_data, pio_config.data_prog_offs, DATA_BASE_PIN, CLK_PIN);
+#ifdef HUB75_LINEDECODER_SM5368
+    hub75_row_noaddr_program_init(pio_config.row_pio, pio_config.sm_row, pio_config.row_prog_offs, STROBE_PIN);
+#else
     hub75_row_program_init(pio_config.row_pio, pio_config.sm_row, pio_config.row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, STROBE_PIN);
+#endif
 }
 
 /**

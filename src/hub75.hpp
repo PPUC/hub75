@@ -59,10 +59,28 @@
 #define PANEL_GENERIC 0
 #define PANEL_FM6126A 1
 #define PANEL_RUL6024 2
+#define PANEL_ICND2153 3
+#define PANEL_STP1612PW05 4
+#define PANEL_FM6124C 5
+#define PANEL_FM6124 6
+#define PANEL_ICN2038S 7
+#define PANEL_DP3246 8
 
 // set your panel type
 // e.g. P3-64*64-32S-V2.0 might have a RUL6024 chip, if so, set PANEL_TYPE to PANEL_RUL6024
+#ifndef PANEL_TYPE
 #define PANEL_TYPE PANEL_GENERIC
+#endif
+
+// Enable for SM5368 row shift-register line decoder (ABC-only addressing).
+// When enabled, row addressing is shifted via GPIO instead of direct A-E decoding.
+// #define HUB75_LINEDECODER_SM5368
+
+// ICND2153/STP1612PW05/FM6124C init sequence expects number of driver chips in the chain.
+// Default assumes one 16-channel driver per 16 columns (e.g. 128px width -> 8 chips).
+#ifndef ICND2153_CHIP_NUM
+#define ICND2153_CHIP_NUM (MATRIX_PANEL_WIDTH / 16)
+#endif
 
 #define INVERTED_STB false
 

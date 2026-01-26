@@ -51,6 +51,28 @@ pulse_loop:
     in x, 32           side 0b10 ; Output data sent to DMA channel after OEn has finished
 .wrap
 
+.program hub75_row_noaddr
+
+; side-set pin 0 is LATCH
+; side-set pin 1 is OEn
+;
+; Each FIFO record consists of:
+; - 5-bit row select (LSBs, ignored)
+; - Pulse width - 1 (27 MSBs)
+;
+; Repeatedly pulse LATCH and generate a pulse of a certain
+; width on OEn (Binary Coded Modulation - BCM).
+
+.side_set 2
+
+.wrap_target
+    out null, 5 [7]    side 0b10 ; Deassert OEn, discard row select bits
+    out x, 27   [7]    side 0b11 ; Pulse LATCH, get OEn pulse width
+pulse_loop_noaddr:
+    jmp x-- pulse_loop_noaddr side 0b00; Assert OEn for x+1 cycles
+    in x, 32           side 0b00 ; Output data sent to DMA channel after OEn has finished
+.wrap
+
 % c-sdk {
 static inline void hub75_row_program_init(PIO pio, uint sm, uint offset, uint row_base_pin, uint n_row_pins, uint latch_base_pin) {
     pio_sm_set_consecutive_pindirs(pio, sm, row_base_pin, n_row_pins, true);
@@ -62,6 +84,19 @@ static inline void hub75_row_program_init(PIO pio, uint sm, uint offset, uint ro
 
     pio_sm_config c = hub75_row_program_get_default_config(offset);
     sm_config_set_out_pins(&c, row_base_pin, n_row_pins);
+    sm_config_set_sideset_pins(&c, latch_base_pin); // STROBE pin and OEn pin
+    sm_config_set_in_shift(&c, true, true, 32);
+    sm_config_set_out_shift(&c, true, true, 32);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+static inline void hub75_row_noaddr_program_init(PIO pio, uint sm, uint offset, uint latch_base_pin) {
+    pio_sm_set_consecutive_pindirs(pio, sm, latch_base_pin, 2, true);
+    pio_gpio_init(pio, latch_base_pin); // aka STROBE pin
+    pio_gpio_init(pio, latch_base_pin + 1); // OEn pin
+
+    pio_sm_config c = hub75_row_noaddr_program_get_default_config(offset);
     sm_config_set_sideset_pins(&c, latch_base_pin); // STROBE pin and OEn pin
     sm_config_set_in_shift(&c, true, true, 32);
     sm_config_set_out_shift(&c, true, true, 32);
